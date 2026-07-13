@@ -3,4 +3,5 @@ release/
 dist/
 *.log
 .DS_Store
-Thumbs.db
+Thumbs.dbrender-server/
+render-server.zip
