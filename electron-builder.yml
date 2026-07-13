@@ -1,0 +1,18 @@
+appId: com.remotedeskpbx.client
+productName: RemoteDeskPBX
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**/*
+  - resources/**/*
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+portable:
+  artifactName: "${productName}-v2.${ext}"
+extraResources:
+  - from: resources/
+    to: resources/

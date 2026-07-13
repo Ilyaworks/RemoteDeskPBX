@@ -1,0 +1,45 @@
+appId: com.remotedeskpbx.server
+productName: RemoteDeskPBX-Server
+directories:
+  output: release-server
+  buildResources: resources
+files:
+  - server.js
+  - node_modules/fastify/**/*
+  - node_modules/@fastify/websocket/**/*
+  - node_modules/ws/**/*
+  - node_modules/pino/**/*
+  - node_modules/pino-pretty/**/*
+  - node_modules/pino-std-serializers/**/*
+  - node_modules/process-warning/**/*
+  - node_modules/atomic-sleep/**/*
+  - node_modules/sonic-boom/**/*
+  - node_modules/on-exit-leak-free/**/*
+  - node_modules/thread-stream/**/*
+  - node_modules/real-require/**/*
+  - node_modules/secure-json-parse/**/*
+  - node_modules/fast-redact/**/*
+  - node_modules/safe-stable-stringify/**/*
+  - node_modules/avvio/**/*
+  - node_modules/find-my-way/**/*
+  - node_modules/light-my-request/**/*
+  - node_modules/pino-abstract-transport/**/*
+  - node_modules/split2/**/*
+  - node_modules/reusify/**/*
+  - node_modules/flatstr/**/*
+  - node_modules/quick-format-unescaped/**/*
+  - node_modules/proxy-addr/**/*
+  - node_modules/forwarded/**/*
+  - node_modules/ipaddr.js/**/*
+  - node_modules/@fastify/error/**/*
+  - node_modules/abstract-logging/**/*
+  - node_modules/events/**/*
+  - node_modules/cookie/**/*
+  - node_modules/set-cookie-parser/**/*
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+portable:
+  artifactName: "${productName}-${version}-portable.${ext}"
