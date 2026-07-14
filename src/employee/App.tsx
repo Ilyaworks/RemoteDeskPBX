@@ -7,6 +7,7 @@ const App: React.FC = () => {
   const [loggedIn, setLoggedIn] = useState(false);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [empName, setEmpName] = useState('');
   const [authError, setAuthError] = useState('');
 
   // Подключение
@@ -55,6 +56,7 @@ const App: React.FC = () => {
     const res = await apiPost('/auth/login', { login, password });
     if (res.type === 'ok') {
       setLoggedIn(true);
+      setEmpName((res.employee && res.employee.name) || login);
       addLog('Авторизация успешна');
     } else {
       setAuthError(res.msg || 'Неверный логин или пароль');
@@ -163,7 +165,7 @@ const App: React.FC = () => {
       }
       addLog(`--- Подключение к клиенту (код: ${code}) ---`);
 
-      const joinRes = await apiPost('/join', { code });
+      const joinRes = await apiPost('/join', { code, employeeLogin: login, employeeName: empName || login });
       addLog(`Сервер: ${joinRes.type}`);
 
       if (joinRes.type === 'error') {
