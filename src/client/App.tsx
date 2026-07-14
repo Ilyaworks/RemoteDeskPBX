@@ -93,7 +93,7 @@ const App: React.FC = () => {
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: 'always' } as MediaTrackConstraints,
-        audio: false,
+        audio: true,
       });
 
       // Ограничение качества для слабого интернета

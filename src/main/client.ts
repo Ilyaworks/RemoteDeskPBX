@@ -80,7 +80,7 @@ async function createWindow() {
         thumbnailSize: { width: 320, height: 240 },
       });
       if (sources.length > 0) {
-        callback({ video: sources[0], audio: 'disable' } as any);
+        callback({ video: sources[0], audio: 'loopback' } as any);
       }
     },
     { useSystemPicker: true } as any,
