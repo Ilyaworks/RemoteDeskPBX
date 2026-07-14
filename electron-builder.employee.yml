@@ -1,0 +1,17 @@
+appId: com.remotedeskpbx.employee
+productName: RemoteDeskPBX-Employee
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/main/employee.js
+  - dist/main/preload.js
+  - dist/employee/**/*
+  - resources/**/*
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+portable:
+  artifactName: "RemoteDeskPBX-Employee-${version}.${ext}"

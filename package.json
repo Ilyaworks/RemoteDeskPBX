@@ -1,22 +1,31 @@
 {
   "name": "remotedeskpbx",
-  "version": "1.0.0",
-  "description": "MVP инструмента удалённого доступа к экрану",
-  "main": "dist/main/index.js",
+  "version": "2.0.0",
+  "description": "RemoteDeskPBX — two apps: Client (shares screen) and Employee (remote control)",
   "scripts": {
-    "build:main": "tsc -p tsconfig.main.json",
-    "build:renderer": "webpack --mode production",
+    "build:main:client": "tsc -p tsconfig.main.client.json",
+    "build:main:employee": "tsc -p tsconfig.main.employee.json",
+    "build:main": "npm run build:main:client && npm run build:main:employee",
+    "build:renderer:client": "webpack --config webpack.client.js --mode production",
+    "build:renderer:employee": "webpack --config webpack.employee.js --mode production",
+    "build:renderer": "npm run build:renderer:client && npm run build:renderer:employee",
     "build": "npm run build:main && npm run build:renderer",
-    "start": "npm run build && electron .",
-    "dev:main": "tsc -p tsconfig.main.json --watch",
-    "dev:renderer": "webpack --mode development --watch",
-    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
-    "pack": "npm run build && electron-builder --win portable",
-    "dist": "npm run build && electron-builder --win portable"
+    "start:client": "npm run build:main:client && npm run build:renderer:client && electron dist/main/client.js",
+    "start:employee": "npm run build:main:employee && npm run build:renderer:employee && electron dist/main/employee.js",
+    "dev:main:client": "tsc -p tsconfig.main.client.json --watch",
+    "dev:main:employee": "tsc -p tsconfig.main.employee.json --watch",
+    "dev:renderer:client": "webpack --config webpack.client.js --mode development --watch",
+    "dev:renderer:employee": "webpack --config webpack.employee.js --mode development --watch",
+    "pack:client": "npm run build:main:client && npm run build:renderer:client && electron-builder --config electron-builder.client.yml --win portable",
+    "pack:employee": "npm run build:main:employee && npm run build:renderer:employee && electron-builder --config electron-builder.employee.yml --win portable",
+    "pack": "npm run pack:client && npm run pack:employee",
+    "dist": "npm run pack"
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.1",
     "@nut-tree-fork/nut-js": "^4.2.6",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "fastify": "^5.2.1",
     "ioredis": "^5.4.2",
     "peerjs": "^1.5.5",
@@ -40,5 +49,6 @@
     "typescript": "^5.7.3",
     "webpack": "^5.97.1",
     "webpack-cli": "^6.0.1"
-  }
+  },
+  "main": "dist/main/client.js"
 }

@@ -1,0 +1,17 @@
+appId: com.remotedeskpbx.client
+productName: RemoteDeskPBX-Client
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/main/client.js
+  - dist/main/preload.js
+  - dist/client/**/*
+  - resources/**/*
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+portable:
+  artifactName: "RemoteDeskPBX-Client-${version}.${ext}"
