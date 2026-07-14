@@ -1,5 +1,7 @@
 appId: com.remotedeskpbx.employee
 productName: RemoteDeskPBX-Employee
+extraMetadata:
+  main: dist/main/employee.js
 directories:
   output: release
   buildResources: resources

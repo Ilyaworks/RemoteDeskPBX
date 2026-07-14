@@ -1,5 +1,7 @@
 appId: com.remotedeskpbx.client
 productName: RemoteDeskPBX-Client
+extraMetadata:
+  main: dist/main/client.js
 directories:
   output: release
   buildResources: resources
