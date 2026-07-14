@@ -6,13 +6,15 @@ directories:
 files:
   - dist/**/*
   - resources/**/*
+asarUnpack:
+  - "dist/main/remote-control.ps1"
 win:
   target:
     - target: portable
       arch:
         - x64
 portable:
-  artifactName: "${productName}-v2.${ext}"
+  artifactName: "${productName}-v3.${ext}"
 extraResources:
   - from: resources/
     to: resources/

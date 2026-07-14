@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  getScreenSourceId: () => ipcRenderer.invoke('get-screen-source'),
-  logError: (msg: string) => ipcRenderer.send('log-error', msg),
+  mouseMove: (x: number, y: number) => ipcRenderer.send('mouse-move', x, y),
+  mouseClick: (button: number) => ipcRenderer.send('mouse-click', button),
+  mouseScroll: (delta: number) => ipcRenderer.send('mouse-scroll', delta),
+  keyPress: (keycode: number) => ipcRenderer.send('key-press', keycode),
 });
