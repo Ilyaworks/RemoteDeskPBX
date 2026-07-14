@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, session, ipcMain } from 'electron';
+import { app, BrowserWindow, desktopCapturer, session, ipcMain, Menu } from 'electron';
 import path from 'path';
 import { mouse, keyboard, Button, Key } from '@nut-tree-fork/nut-js';
 
@@ -72,6 +72,7 @@ ipcMain.on('key-press', async (_e, keycode: number) => {
 // ============ CLIENT WINDOW ============
 async function createWindow() {
   mouse.config.autoDelayMs = 0;
+  Menu.setApplicationMenu(null);
 
   session.defaultSession.setDisplayMediaRequestHandler(
     async (_req, callback) => {
@@ -89,6 +90,7 @@ async function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1000,
     height: 750,
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

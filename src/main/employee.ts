@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, ipcMain } from 'electron';
+import { app, BrowserWindow, session, ipcMain, Menu } from 'electron';
 import path from 'path';
 import { mouse, Button, Key, keyboard } from '@nut-tree-fork/nut-js';
 
@@ -72,12 +72,14 @@ ipcMain.on('key-press', async (_e, keycode: number) => {
 // ============ EMPLOYEE WINDOW ============
 async function createWindow() {
   mouse.config.autoDelayMs = 0;
+  Menu.setApplicationMenu(null);
 
   // Employee does not share screen, only views
 
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

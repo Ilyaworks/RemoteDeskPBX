@@ -308,7 +308,7 @@ const App: React.FC = () => {
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
           <input type="text" value={inputCode}
             onChange={e => setInputCode(e.target.value.replace(/\D/g, '').slice(0, 9))}
-            placeholder="111 222 333" maxLength={9}
+            placeholder="111 222 333"
             onKeyDown={e => e.key === 'Enter' && handleConnect()}
             style={{ flex: 1, padding: '12px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '18px', fontFamily: 'monospace', letterSpacing: '4px', textAlign: 'center' }} />
           <button onClick={handleConnect}
