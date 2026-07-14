@@ -12,9 +12,12 @@ const App: React.FC = () => {
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
+  const chatDcRef = useRef<RTCDataChannel | null>(null);
   const pollingRef = useRef(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const codeRef = useRef('');
+  const sessionIdRef = useRef('');
+  const autoShotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const addLog = (msg: string) => setLog(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -74,10 +77,48 @@ const App: React.FC = () => {
     }
   };
 
+  // ===== T8: авто-скриншоты каждые 30с на сервер =====
+  const AUTO_SHOT_INTERVAL_MS = 30000;
+
+  const captureAndUpload = async () => {
+    const sessionId = sessionIdRef.current;
+    const video = localVideoRef.current;
+    if (!sessionId || !video || !video.videoWidth || !video.videoHeight) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const image = canvas.toDataURL('image/jpeg', 0.6);
+      await fetch(`${API}/screenshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, image, timestamp: Date.now() }),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (err: any) {
+      addLog(`Авто-скриншот: ошибка ${err.message}`);
+    }
+  };
+
+  const startAutoScreenshots = () => {
+    if (autoShotTimerRef.current) return;
+    // первый снимок через 3с (даём видеопотоку прогреться), далее каждые 30с
+    setTimeout(() => { captureAndUpload(); }, 3000);
+    autoShotTimerRef.current = setInterval(captureAndUpload, AUTO_SHOT_INTERVAL_MS);
+    addLog('Авто-скриншоты включены (каждые 30с)');
+  };
+
   const cleanup = useCallback(() => {
     pollingRef.current = false;
+    if (autoShotTimerRef.current) { clearInterval(autoShotTimerRef.current); autoShotTimerRef.current = null; }
+    sessionIdRef.current = '';
     dcRef.current?.close();
     dcRef.current = null;
+    chatDcRef.current?.close();
+    chatDcRef.current = null;
     if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); setLocalStream(null); }
     setStatus('disconnected');
@@ -120,9 +161,13 @@ const App: React.FC = () => {
 
       const code = reg.code;
       codeRef.current = code;
+      sessionIdRef.current = reg.sessionId || '';
       setRoomCode(code);
       setStatus('waiting');
       addLog(`Код комнаты: ${code}`);
+
+      // T8: авто-скриншоты этого сеанса на сервер
+      if (sessionIdRef.current) startAutoScreenshots();
 
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
