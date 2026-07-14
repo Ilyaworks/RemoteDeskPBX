@@ -1,5 +1,6 @@
-import { app, BrowserWindow, session, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, session, ipcMain, Menu, safeStorage } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { mouse, Button, Key, keyboard } from '@nut-tree-fork/nut-js';
 
 // ============ Mouse & Keyboard via nut-js ============
@@ -67,6 +68,65 @@ ipcMain.on('key-press', async (_e, keycode: number) => {
       await keyboard.releaseKey(key);
     }
   } catch (err) { console.error('key-press error:', err); }
+});
+
+// ============ T7: сохранение скриншотов в Документы ============
+ipcMain.handle('save-screenshot', async (_e, dataUrl: string, code: string) => {
+  try {
+    if (!dataUrl) return { ok: false, error: 'empty' };
+    const safeCode = (code || 'general').replace(/[^0-9A-Za-zА-Яа-я_-]/g, '') || 'general';
+    const dir = path.join(app.getPath('documents'), 'RemoteDeskPBX', safeCode);
+    fs.mkdirSync(dir, { recursive: true });
+    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const file = path.join(dir, `${Date.now()}.jpg`);
+    fs.writeFileSync(file, base64, 'base64');
+    return { ok: true, file };
+  } catch (err: any) {
+    console.error('save-screenshot error:', err);
+    return { ok: false, error: err.message };
+  }
+});
+
+// ============ T1: хранение учётных данных сотрудника (safeStorage) ============
+const credsPath = () => path.join(app.getPath('userData'), 'employee-creds.bin');
+
+ipcMain.handle('creds-save', async (_e, data: { login: string; password: string }) => {
+  try {
+    const json = JSON.stringify(data);
+    if (safeStorage.isEncryptionAvailable()) {
+      fs.writeFileSync(credsPath(), safeStorage.encryptString(json));
+    } else {
+      // fallback: без шифрования (напр. Linux без keyring); помечаем префиксом
+      fs.writeFileSync(credsPath(), 'PLAIN:' + json, 'utf8');
+    }
+    return { ok: true };
+  } catch (err: any) {
+    console.error('creds-save error:', err);
+    return { ok: false };
+  }
+});
+
+ipcMain.handle('creds-load', async () => {
+  try {
+    const p = credsPath();
+    if (!fs.existsSync(p)) return null;
+    const buf = fs.readFileSync(p);
+    const head = buf.subarray(0, 6).toString('utf8');
+    if (head === 'PLAIN:') return JSON.parse(buf.subarray(6).toString('utf8'));
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    return JSON.parse(safeStorage.decryptString(buf));
+  } catch (err) {
+    console.error('creds-load error:', err);
+    return null;
+  }
+});
+
+ipcMain.handle('creds-clear', async () => {
+  try {
+    const p = credsPath();
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    return { ok: true };
+  } catch { return { ok: false }; }
 });
 
 // ============ EMPLOYEE WINDOW ============

@@ -9,6 +9,7 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [empName, setEmpName] = useState('');
   const [authError, setAuthError] = useState('');
+  const [remember, setRemember] = useState(true);
 
   // Подключение
   const [status, setStatus] = useState('disconnected');
@@ -47,20 +48,51 @@ const App: React.FC = () => {
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
   ];
 
-  const handleLogin = async () => {
+  const handleLogin = async (loginArg?: string, passwordArg?: string) => {
     setAuthError('');
-    if (!login || !password) {
+    const l = (loginArg ?? login).trim();
+    const p = passwordArg ?? password;
+    if (!l || !p) {
       setAuthError('Введите логин и пароль');
       return;
     }
-    const res = await apiPost('/auth/login', { login, password });
+    const res = await apiPost('/auth/login', { login: l, password: p });
     if (res.type === 'ok') {
       setLoggedIn(true);
-      setEmpName((res.employee && res.employee.name) || login);
+      setEmpName((res.employee && res.employee.name) || l);
       addLog('Авторизация успешна');
+      // T1: запомнить / забыть учётку
+      const api = (window as any).electronAPI;
+      if (remember) api?.credsSave?.({ login: l, password: p });
+      else api?.credsClear?.();
     } else {
       setAuthError(res.msg || 'Неверный логин или пароль');
     }
+  };
+
+  // T1: авто-вход по сохранённым данным при запуске
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.credsLoad) return;
+    api.credsLoad().then((creds: any) => {
+      if (creds?.login && creds?.password) {
+        setLogin(creds.login);
+        setPassword(creds.password);
+        setRemember(true);
+        addLog('Найдены сохранённые данные, вход…');
+        handleLogin(creds.login, creds.password);
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogout = async () => {
+    const api = (window as any).electronAPI;
+    await api?.credsClear?.();
+    setLoggedIn(false);
+    setPassword('');
+    setRemember(false);
+    addLog('Выход выполнен');
   };
 
   const sendDC = (msg: object) => {
@@ -232,6 +264,14 @@ const App: React.FC = () => {
               if (msg.type === 'screenshot-data') {
                 setLastScreenshot(msg.data);
                 addLog('📸 Скриншот получен');
+                // T7: сохраняем в Документы/RemoteDeskPBX/<код>/
+                const api = (window as any).electronAPI;
+                if (api?.saveScreenshot) {
+                  api.saveScreenshot(msg.data, inputCode).then((r: any) => {
+                    if (r?.ok) addLog(`💾 Сохранён: ${r.file}`);
+                    else addLog(`Не удалось сохранить скриншот: ${r?.error || ''}`);
+                  }).catch(() => {});
+                }
               }
             } catch {}
           };
@@ -291,8 +331,12 @@ const App: React.FC = () => {
         <input value={password} onChange={e => setPassword(e.target.value)}
           type="password" placeholder="Пароль" autoComplete="current-password"
           onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          style={{ width: '100%', padding: '12px', marginBottom: '15px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '16px', boxSizing: 'border-box' }} />
-        <button onClick={handleLogin}
+          style={{ width: '100%', padding: '12px', marginBottom: '12px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '16px', boxSizing: 'border-box' }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px', fontSize: '14px', color: '#555', cursor: 'pointer', userSelect: 'none' }}>
+          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+          Запомнить меня (вход без пароля при следующем запуске)
+        </label>
+        <button onClick={() => handleLogin()}
           style={{ width: '100%', padding: '14px', background: '#34a853', color: 'white', border: 'none', borderRadius: '6px', fontSize: '18px', cursor: 'pointer' }}>
           Войти
         </button>
@@ -304,6 +348,13 @@ const App: React.FC = () => {
   if (!status || status === 'disconnected' || status === 'failed') {
     return (
       <div style={{ padding: '40px', fontFamily: 'Arial', maxWidth: '480px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <span style={{ fontSize: '13px', color: '#888' }}>👤 {empName || login}</span>
+          <button onClick={handleLogout}
+            style={{ padding: '4px 12px', background: 'transparent', color: '#ea4335', border: '1px solid #ea4335', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>
+            Выйти
+          </button>
+        </div>
         <h1 style={{ color: '#34a853', fontSize: '28px', textAlign: 'center' }}>🛠️ RemoteDeskPBX</h1>
         <p style={{ textAlign: 'center', color: '#888', marginBottom: '30px' }}>Введите код, который назвал клиент</p>
         {error && <div style={{ color: '#ea4335', background: '#fce8e6', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{error}</div>}
@@ -403,9 +454,12 @@ const App: React.FC = () => {
             </button>
             {lastScreenshot && (
               <div style={{ marginTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: '#34a853', marginBottom: '4px' }}>
+                  ✅ Сохранён в Документы\RemoteDeskPBX\{inputCode || 'general'}\
+                </div>
                 <a href={lastScreenshot} download={`screenshot-${Date.now()}.jpg`}
                   style={{ fontSize: '12px', color: '#1a73e8', cursor: 'pointer' }}>
-                  💾 Сохранить скриншот
+                  💾 Скачать вручную
                 </a>
                 <img src={lastScreenshot} alt="screenshot" style={{ width: '100%', marginTop: '5px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
