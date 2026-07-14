@@ -146,6 +146,7 @@ async function createWindow() {
     width: 1000,
     height: 750,
     autoHideMenuBar: true,
+    icon: path.join(__dirname, '../../resources/icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
