@@ -300,11 +300,11 @@ app.get('/admin', (req, res) => {
     }
 
     function showDashboard() {
-      document.getElementById('app').innerHTML = '<h1>🛠️ RemoteDeskPBX Админ-панель</h1><div class="tabs"><div class="tab '+(currentTab==='employees'?'active':'')+'" onclick="switchTab(\'employees\')">👥 Сотрудники</div><div class="tab '+(currentTab==='sessions'?'active':'')+'" onclick="switchTab(\'sessions\')">📊 Сессии</div><div class="tab '+(currentTab==='settings'?'active':'')+'" onclick="switchTab(\'settings\')">⚙️ Настройки</div></div><div id="tab-content"></div>';
+      document.getElementById('app').innerHTML = '<h1>🛠️ RemoteDeskPBX Админ-панель</h1><div class="tabs"><div class="tab '+(currentTab==='employees'?'active':'')+'" onclick="switchTab(\\'employees\\')">👥 Сотрудники</div><div class="tab '+(currentTab==='sessions'?'active':'')+'" onclick="switchTab(\\'sessions\\')">📊 Сессии</div><div class="tab '+(currentTab==='settings'?'active':'')+'" onclick="switchTab(\\'settings\\')">⚙️ Настройки</div></div><div id="tab-content"></div>';
       renderTab();
     }
 
-    function switchTab(t) { currentTab=t; renderTab(); }
+    function switchTab(t) { currentTab=t; showDashboard(); }
 
     function renderTab() {
       const c = document.getElementById('tab-content');
@@ -314,24 +314,24 @@ app.get('/admin', (req, res) => {
     }
 
     function renderEmployees(c) {
-      c.innerHTML = '<div class="card"><div class="card-header"><h2>👥 Сотрудники ('+employees.length+')</h2></div><div class="inline-form"><input id="new-login" placeholder="Логин"><input id="new-pass" type="password" placeholder="Пароль"><input id="new-name" placeholder="Имя"><button class="btn btn-success" onclick="addEmployee()">➕ Добавить</button></div><table><thead><tr><th>Логин</th><th>Имя</th><th>Статус</th><th>Создан</th><th>Сессии</th><th></th></tr></thead><tbody>'+employees.map(e=>{const es=sessions.filter(s=>s.employeeName===e.login); return '<tr><td>'+e.login+'</td><td>'+(e.name||e.login)+'</td><td><span class="badge '+(e.active!==false?'badge-active':'badge-inactive')+'">'+(e.active!==false?'Активен':'Неактивен')+'</span></td><td>'+(e.createdAt?dt(e.createdAt):'-')+'</td><td><a class="employee-link" onclick="filterByEmployee(\''+(e.name||e.login)+'\')">'+es.length+' сессий &rarr;</a></td><td><button class="btn btn-danger btn-sm" onclick="deleteEmployee(\''+e.login+'\')">Удалить</button></td></tr>';}).join('')+(employees.length===0?'<tr><td colspan="6" class="empty-state">Нет сотрудников</td></tr>':'')+'</tbody></table></div>';
+      c.innerHTML = '<div class="card"><div class="card-header"><h2>👥 Сотрудники ('+employees.length+')</h2></div><div class="inline-form"><input id="new-login" placeholder="Логин"><input id="new-pass" type="password" placeholder="Пароль"><input id="new-name" placeholder="Имя"><button class="btn btn-success" onclick="addEmployee()">➕ Добавить</button></div><table><thead><tr><th>Логин</th><th>Имя</th><th>Статус</th><th>Создан</th><th>Сессии</th><th></th></tr></thead><tbody>'+employees.map(e=>{const es=sessions.filter(s=>s.employeeName===e.login); return '<tr><td>'+e.login+'</td><td>'+(e.name||e.login)+'</td><td><span class="badge '+(e.active!==false?'badge-active':'badge-inactive')+'">'+(e.active!==false?'Активен':'Неактивен')+'</span></td><td>'+(e.createdAt?dt(e.createdAt):'-')+'</td><td><a class="employee-link" onclick="filterByEmployee(\\''+(e.name||e.login)+'\\')">'+es.length+' сессий &rarr;</a></td><td><button class="btn btn-danger btn-sm" onclick="deleteEmployee(\\''+e.login+'\\')">Удалить</button></td></tr>';}).join('')+(employees.length===0?'<tr><td colspan="6" class="empty-state">Нет сотрудников</td></tr>':'')+'</tbody></table></div>';
     }
 
     function renderSessions(c) {
-      c.innerHTML = '<div class="card"><div class="card-header"><h2>📊 Сессии'+(filterEmployee?' сотрудника "'+filterEmployee+'"':'')+' ('+sessions.length+')</h2><div>'+(filterEmployee?'<button class="btn btn-warning btn-sm" onclick="clearFilter()">✕ Сбросить</button>':'')+'</div></div><table><thead><tr><th>Код</th><th>Сотрудник</th><th>Начало</th><th>Конец</th><th>Длительность</th><th>Скриншоты</th></tr></thead><tbody>'+sessions.slice().reverse().map(s=>{const d=s.durationSeconds!==null?fmt(s.durationSeconds):(s.endTime?'-':'🟢 Активна'); return '<tr><td style="font-family:monospace">'+(s.code||'-')+'</td><td>'+(s.employeeName||s.employee||'-')+'</td><td>'+dt(s.startTime)+'</td><td>'+dt(s.endTime)+'</td><td><span class="duration-format">'+d+'</span></td><td><button class="btn btn-primary btn-sm" onclick="loadScreenshots(\''+s.id+'\')">📸 Смотреть</button></td></tr>';}).join('')+(sessions.length===0?'<tr><td colspan="6" class="empty-state">Нет сессий</td></tr>':'')+'</tbody></table></div><div id="screenshots-section"></div>';
+      c.innerHTML = '<div class="card"><div class="card-header"><h2>📊 Сессии'+(filterEmployee?' сотрудника "'+filterEmployee+'"':'')+' ('+sessions.length+')</h2><div>'+(filterEmployee?'<button class="btn btn-warning btn-sm" onclick="clearFilter()">✕ Сбросить</button>':'')+'</div></div><table><thead><tr><th>Код</th><th>Сотрудник</th><th>Начало</th><th>Конец</th><th>Длительность</th><th>Скриншоты</th></tr></thead><tbody>'+sessions.slice().reverse().map(s=>{const d=s.durationSeconds!==null?fmt(s.durationSeconds):(s.endTime?'-':'🟢 Активна'); return '<tr><td style="font-family:monospace">'+(s.code||'-')+'</td><td>'+(s.employeeName||s.employee||'-')+'</td><td>'+dt(s.startTime)+'</td><td>'+dt(s.endTime)+'</td><td><span class="duration-format">'+d+'</span></td><td><button class="btn btn-primary btn-sm" onclick="loadScreenshots(\\''+s.id+'\\')">📸 Смотреть</button></td></tr>';}).join('')+(sessions.length===0?'<tr><td colspan="6" class="empty-state">Нет сессий</td></tr>':'')+'</tbody></table></div><div id="screenshots-section"></div>';
     }
 
     function renderSettings(c) {
       c.innerHTML = '<div class="card"><div class="card-header"><h2>⚙️ Настройки</h2></div><div id="settings-msg"></div><div style="max-width:400px"><label style="font-weight:500;display:block;margin-bottom:8px;color:#555">Смена пароля администратора</label><div style="display:flex;flex-direction:column;gap:10px"><input id="cur-pass" type="password" placeholder="Текущий пароль"><input id="new-pass-admin" type="password" placeholder="Новый пароль (мин. 4 символа)"><button class="btn btn-primary" onclick="changePassword()">Сменить пароль</button></div></div></div>';
     }
 
-    function filterByEmployee(n) { filterEmployee=n; loadData(); }
+    function filterByEmployee(n) { filterEmployee=n; currentTab='sessions'; loadData(); }
     function clearFilter() { filterEmployee=''; loadData(); }
 
     async function loadData() {
       const r = await fetch('/admin/sessions'+(filterEmployee?'?employee='+encodeURIComponent(filterEmployee):''), { headers: { Authorization: token } });
       sessions = await r.json();
-      renderTab();
+      showDashboard();
     }
 
     async function addEmployee() {
