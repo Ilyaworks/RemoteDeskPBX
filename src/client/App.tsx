@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const chatDcRef = useRef<RTCDataChannel | null>(null);
   const pollingRef = useRef(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const codeRef = useRef('');
   const sessionIdRef = useRef('');
   const autoShotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,27 +78,49 @@ const App: React.FC = () => {
     }
   };
 
+  // ===== Снимок текущего кадра экрана из уже захваченного потока =====
+  // maxWidth>0 — уменьшить (для отправки по DataChannel, где есть лимит размера)
+  const grabFrameDataUrl = async (maxWidth = 0, quality = 0.6): Promise<string | null> => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    let sw = 0, sh = 0;
+    const video = localVideoRef.current;
+    let source: CanvasImageSource | null = null;
+    if (video && video.videoWidth && video.videoHeight) {
+      source = video; sw = video.videoWidth; sh = video.videoHeight;
+    } else {
+      const track = localStreamRef.current?.getVideoTracks()[0];
+      const IC = (window as any).ImageCapture;
+      if (!track || !IC) return null;
+      const bitmap = await new IC(track).grabFrame();
+      source = bitmap; sw = bitmap.width; sh = bitmap.height;
+    }
+    if (!source || !sw || !sh) return null;
+    let dw = sw, dh = sh;
+    if (maxWidth && sw > maxWidth) { dw = maxWidth; dh = Math.round(sh * (maxWidth / sw)); }
+    canvas.width = dw; canvas.height = dh;
+    ctx.drawImage(source, 0, 0, dw, dh);
+    return canvas.toDataURL('image/jpeg', quality);
+  };
+
   // ===== T8: авто-скриншоты каждые 30с на сервер =====
   const AUTO_SHOT_INTERVAL_MS = 30000;
 
   const captureAndUpload = async () => {
     const sessionId = sessionIdRef.current;
-    const video = localVideoRef.current;
-    if (!sessionId || !video || !video.videoWidth || !video.videoHeight) return;
+    if (!sessionId) { addLog('⚠️ Авто-скриншот: нет sessionId — пропуск'); return; }
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const image = canvas.toDataURL('image/jpeg', 0.6);
-      await fetch(`${API}/screenshot`, {
+      const image = await grabFrameDataUrl(0, 0.6);
+      if (!image) { addLog('Авто-скриншот: кадр ещё не готов — пропуск'); return; }
+      const res = await fetch(`${API}/screenshot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, image, timestamp: Date.now() }),
         signal: AbortSignal.timeout(15000),
       });
+      const j = await res.json().catch(() => ({} as any));
+      addLog(`📸 Авто-скриншот отправлен (${j.type || res.status})`);
     } catch (err: any) {
       addLog(`Авто-скриншот: ошибка ${err.message}`);
     }
@@ -151,6 +174,7 @@ const App: React.FC = () => {
       }
 
       setLocalStream(stream);
+      localStreamRef.current = stream;
       addLog('Захват экрана запущен');
 
       setStatus('registering');
@@ -169,6 +193,7 @@ const App: React.FC = () => {
 
       // T8: авто-скриншоты этого сеанса на сервер
       if (sessionIdRef.current) startAutoScreenshots();
+      else addLog('⚠️ Сервер не вернул sessionId — авто-скриншоты недоступны (обновите сервер)');
 
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
@@ -248,29 +273,14 @@ const App: React.FC = () => {
 
   const takeScreenshot = async (dc: RTCDataChannel) => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' } as MediaTrackConstraints,
-      });
-      const track = stream.getVideoTracks()[0];
-      const imageCapture = new (window as any).ImageCapture(track);
-      const bitmap = await imageCapture.grabFrame();
-      track.stop();
-
-      // Convert bitmap to blob
-      const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(bitmap, 0, 0);
-      canvas.toBlob((blob) => {
-        if (blob && dc.readyState === 'open') {
-          const reader = new FileReader();
-          reader.onload = () => {
-            dc.send(JSON.stringify({ type: 'screenshot-data', data: reader.result }));
-          };
-          reader.readAsDataURL(blob);
-        }
-      }, 'image/jpeg', 0.7);
+      // Переиспользуем уже захваченный экран (без повторного запроса выбора),
+      // уменьшаем до 1280px по ширине, чтобы уложиться в лимит DataChannel.
+      const dataUrl = await grabFrameDataUrl(1280, 0.6);
+      if (!dataUrl) { addLog('Скриншот: кадр недоступен'); return; }
+      if (dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'screenshot-data', data: dataUrl }));
+        addLog('📸 Скриншот отправлен сотруднику');
+      }
     } catch (err) {
       addLog(`Ошибка скриншота: ${(err as any).message}`);
     }

@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [empName, setEmpName] = useState('');
   const [authError, setAuthError] = useState('');
   const [remember, setRemember] = useState(true);
+  const [checkingCreds, setCheckingCreds] = useState(true);
 
   // Подключение
   const [status, setStatus] = useState('disconnected');
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const chatDcRef = useRef<RTCDataChannel | null>(null);
+  const screenshotDcRef = useRef<RTCDataChannel | null>(null);
   const pollingRef = useRef(false);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const lastMouseRef = useRef({ x: -1, y: -1 });
@@ -70,19 +72,23 @@ const App: React.FC = () => {
     }
   };
 
-  // T1: авто-вход по сохранённым данным при запуске
+  // T1: авто-вход по сохранённым данным при запуске (без мигания формы логина)
   useEffect(() => {
     const api = (window as any).electronAPI;
-    if (!api?.credsLoad) return;
-    api.credsLoad().then((creds: any) => {
-      if (creds?.login && creds?.password) {
-        setLogin(creds.login);
-        setPassword(creds.password);
-        setRemember(true);
-        addLog('Найдены сохранённые данные, вход…');
-        handleLogin(creds.login, creds.password);
-      }
-    }).catch(() => {});
+    if (!api?.credsLoad) { setCheckingCreds(false); return; }
+    (async () => {
+      try {
+        const creds = await api.credsLoad();
+        if (creds?.login && creds?.password) {
+          setLogin(creds.login);
+          setPassword(creds.password);
+          setRemember(true);
+          addLog('Найдены сохранённые данные, вход…');
+          await handleLogin(creds.login, creds.password);
+        }
+      } catch {}
+      setCheckingCreds(false);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -258,6 +264,7 @@ const App: React.FC = () => {
           };
           channel.onopen = () => addLog('Канал чата открыт');
         } else if (channel.label === 'screenshot') {
+          screenshotDcRef.current = channel;
           channel.onmessage = (ev) => {
             try {
               const msg = JSON.parse(ev.data);
@@ -290,8 +297,13 @@ const App: React.FC = () => {
   };
 
   const requestScreenshot = () => {
-    sendDC({ type: 'screenshot-request' });
-    addLog('📸 Запрос скриншота...');
+    const dc = screenshotDcRef.current;
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({ type: 'screenshot-request' }));
+      addLog('📸 Запрос скриншота...');
+    } else {
+      addLog('Скриншот недоступен: канал ещё не готов');
+    }
   };
 
   // Чат
@@ -317,6 +329,16 @@ const App: React.FC = () => {
     await apiPost('/disconnect', { code: inputCode }).catch(() => {});
     cleanup();
   };
+
+  // Пока проверяем сохранённые данные — показываем сплэш, а не форму логина
+  if (checkingCreds) {
+    return (
+      <div style={{ padding: '80px 40px', fontFamily: 'Arial', textAlign: 'center' }}>
+        <h1 style={{ color: '#34a853', fontSize: '28px' }}>🛠️ RemoteDeskPBX</h1>
+        <p style={{ color: '#888', marginTop: '12px' }}>Загрузка…</p>
+      </div>
+    );
+  }
 
   // Экран логина
   if (!loggedIn) {
