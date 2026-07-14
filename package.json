@@ -19,7 +19,7 @@
     "pack:client": "npm run build:main:client && npm run build:renderer:client && electron-builder --config electron-builder.client.yml --win portable",
     "pack:employee": "npm run build:main:employee && npm run build:renderer:employee && electron-builder --config electron-builder.employee.yml --win portable",
     "pack": "npm run pack:client && npm run pack:employee",
-    "server": "node server.js",
+    "start": "node server.js",
     "dist": "npm run pack"
   },
   "dependencies": {
