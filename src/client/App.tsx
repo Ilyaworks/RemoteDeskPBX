@@ -119,6 +119,7 @@ const App: React.FC = () => {
     dcRef.current = null;
     chatDcRef.current?.close();
     chatDcRef.current = null;
+    (window as any).electronAPI?.hideChat?.();
     if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); setLocalStream(null); }
     setStatus('disconnected');
@@ -195,14 +196,15 @@ const App: React.FC = () => {
       dc.onopen = () => addLog('Канал управления открыт');
       dc.onclose = () => addLog('Канал управления закрыт');
 
-      // Data channel для чата
+      // Data channel для чата → плавающее окно (T2)
       const chatDc = pc.createDataChannel('chat', { ordered: true });
+      chatDcRef.current = chatDc;
       chatDc.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
           if (msg.type === 'chat') {
             addLog(`💬 Сотрудник: ${msg.text}`);
-            setChatMessages(prev => [...prev, { from: 'employee', text: msg.text }]);
+            (window as any).electronAPI?.showChat?.({ from: 'employee', text: msg.text });
           }
         } catch {}
       };
@@ -274,19 +276,17 @@ const App: React.FC = () => {
     }
   };
 
-  const [chatMessages, setChatMessages] = useState<{from: string; text: string}[]>([]);
-  const [chatInput, setChatInput] = useState('');
-
-  const sendChat = () => {
-    if (!chatInput.trim()) return;
-    const dc = dcRef.current;
-    if (dc && dc.readyState === 'open') {
-      dc.send(JSON.stringify({ type: 'chat', text: chatInput }));
-    }
-    setChatMessages(prev => [...prev, { from: 'me', text: chatInput }]);
-    setChatInput('');
-    addLog(`💬 Я: ${chatInput}`);
-  };
+  // T2: сообщения из плавающего окна чата → отправка сотруднику по DataChannel
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onChatOutgoing) return;
+    api.onChatOutgoing((text: string) => {
+      const dc = chatDcRef.current;
+      if (dc && dc.readyState === 'open') dc.send(JSON.stringify({ type: 'chat', text }));
+      else addLog('Чат недоступен: нет соединения');
+      addLog(`💬 Я: ${text}`);
+    });
+  }, []);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
@@ -334,23 +334,9 @@ const App: React.FC = () => {
       {error && <div style={{ color: '#ea4335', background: '#fce8e6', padding: '8px', borderRadius: '4px', marginBottom: '10px' }}>{error}</div>}
       {localStream && <video ref={localVideoRef} autoPlay muted style={{ width: '100%', maxHeight: '40vh', borderRadius: '8px' }} />}
 
-      {/* Чат */}
-      <div style={{ marginTop: '15px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
-        <h4 style={{ margin: '0 0 10px', color: '#555' }}>💬 Чат с сотрудником</h4>
-        <div style={{ maxHeight: '150px', overflow: 'auto', marginBottom: '10px', background: '#f9f9f9', padding: '8px', borderRadius: '4px', fontSize: '13px' }}>
-          {chatMessages.length === 0 && <span style={{ color: '#aaa' }}>Нет сообщений</span>}
-          {chatMessages.map((m, i) => (
-            <div key={i} style={{ margin: '2px 0', color: m.from === 'me' ? '#1a73e8' : '#34a853' }}>
-              {m.from === 'me' ? '👤 Я: ' : '🛠️ Сотрудник: '}{m.text}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendChat()}
-            placeholder="Напишите сообщение..." style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
-          <button onClick={sendChat} style={{ padding: '8px 16px', background: '#1a73e8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Отправить</button>
-        </div>
+      {/* T2: чат вынесен в отдельное плавающее окно на рабочем столе */}
+      <div style={{ marginTop: '15px', background: '#e8f0fe', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#555' }}>
+        💬 Когда специалист поддержки напишет, у вас всплывёт отдельное окно чата поверх рабочего стола.
       </div>
 
       <button onClick={handleDisconnect} style={{ marginTop: '15px', padding: '10px 20px', backgroundColor: '#ea4335', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>Отключиться</button>

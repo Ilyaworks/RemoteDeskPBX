@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, session, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, desktopCapturer, session, ipcMain, Menu, screen } from 'electron';
 import path from 'path';
 import { mouse, keyboard, Button, Key } from '@nut-tree-fork/nut-js';
 
@@ -69,6 +69,61 @@ ipcMain.on('key-press', async (_e, keycode: number) => {
   } catch (err) { console.error('key-press error:', err); }
 });
 
+// ============ T2: плавающее окно чата у клиента ============
+let mainWindow: BrowserWindow | null = null;
+let chatWindow: BrowserWindow | null = null;
+const chatQueue: { from: string; text: string }[] = [];
+
+function createChatWindow(): BrowserWindow {
+  if (chatWindow && !chatWindow.isDestroyed()) return chatWindow;
+  const work = screen.getPrimaryDisplay().workAreaSize;
+  const W = 320, H = 440;
+  chatWindow = new BrowserWindow({
+    width: W,
+    height: H,
+    x: Math.max(0, work.width - W - 20),
+    y: Math.max(0, work.height - H - 20),
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    show: false,
+    title: 'Чат поддержки',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  chatWindow.setAlwaysOnTop(true, 'screen-saver');
+  chatWindow.loadFile(path.join(__dirname, '../../resources/chat.html'));
+  chatWindow.webContents.on('did-finish-load', () => {
+    while (chatQueue.length && chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.webContents.send('chat-display', chatQueue.shift());
+    }
+  });
+  chatWindow.on('closed', () => { chatWindow = null; });
+  return chatWindow;
+}
+
+// Клиент получил сообщение от сотрудника → показать в плавающем окне
+ipcMain.on('chat-show', (_e, msg: { from: string; text: string }) => {
+  const w = createChatWindow();
+  if (w.webContents.isLoadingMainFrame()) chatQueue.push(msg);
+  else w.webContents.send('chat-display', msg);
+  if (!w.isVisible()) w.showInactive();
+  w.setAlwaysOnTop(true, 'screen-saver');
+});
+
+ipcMain.on('chat-hide', () => {
+  if (chatWindow && !chatWindow.isDestroyed()) chatWindow.hide();
+});
+
+// Пользователь набрал сообщение в плавающем окне → передать в окно приложения (DataChannel)
+ipcMain.on('chat-send', (_e, text: string) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chat-outgoing', text);
+});
+
 // ============ CLIENT WINDOW ============
 async function createWindow() {
   mouse.config.autoDelayMs = 0;
@@ -87,7 +142,7 @@ async function createWindow() {
     { useSystemPicker: true } as any,
   );
 
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1000,
     height: 750,
     autoHideMenuBar: true,
@@ -98,6 +153,7 @@ async function createWindow() {
     },
     title: 'RemoteDeskPBX Client',
   });
+  mainWindow.on('closed', () => { mainWindow = null; });
 
   if (process.env.NODE_ENV === 'development') {
     await mainWindow.loadURL('http://localhost:8080');

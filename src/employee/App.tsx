@@ -443,7 +443,7 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Боковая панель: скриншот + чат */}
+        {/* Боковая панель: скриншот */}
         <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {/* Скриншот */}
           <div style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
@@ -466,24 +466,25 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {/* Чат */}
-          <div style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px', flex: 1 }}>
-            <h4 style={{ margin: '0 0 8px', color: '#555' }}>💬 Чат</h4>
-            <div style={{ maxHeight: '200px', overflow: 'auto', marginBottom: '8px', background: '#f9f9f9', padding: '8px', borderRadius: '4px', fontSize: '13px', minHeight: '80px' }}>
-              {chatMessages.length === 0 && <span style={{ color: '#aaa' }}>Нет сообщений</span>}
-              {chatMessages.map((m, i) => (
-                <div key={i} style={{ margin: '2px 0', color: m.from === 'me' ? '#34a853' : '#1a73e8' }}>
-                  {m.from === 'me' ? '🛠️ Я: ' : '👤 Клиент: '}{m.text}
-                </div>
-              ))}
+        </div>
+      </div>
+
+      {/* T2: чат сотрудника — снизу в основном окне, во всю ширину */}
+      <div style={{ marginTop: '15px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
+        <h4 style={{ margin: '0 0 8px', color: '#555' }}>💬 Чат с клиентом</h4>
+        <div style={{ height: '120px', overflow: 'auto', marginBottom: '8px', background: '#f9f9f9', padding: '8px', borderRadius: '4px', fontSize: '13px' }}>
+          {chatMessages.length === 0 && <span style={{ color: '#aaa' }}>Нет сообщений</span>}
+          {chatMessages.map((m, i) => (
+            <div key={i} style={{ margin: '2px 0', color: m.from === 'me' ? '#34a853' : '#1a73e8' }}>
+              {m.from === 'me' ? '🛠️ Я: ' : '👤 Клиент: '}{m.text}
             </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendChat()}
-                placeholder="Сообщение..." style={{ flex: 1, padding: '6px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '13px' }} />
-              <button onClick={sendChat} style={{ padding: '6px 12px', background: '#34a853', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>→</button>
-            </div>
-          </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && sendChat()}
+            placeholder="Сообщение клиенту..." style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }} />
+          <button onClick={sendChat} style={{ padding: '8px 20px', background: '#34a853', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>Отправить</button>
         </div>
       </div>
 
