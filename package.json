@@ -20,6 +20,7 @@
     "pack:employee": "npm run build:main:employee && npm run build:renderer:employee && electron-builder --config electron-builder.employee.yml --win portable",
     "pack": "npm run pack:client && npm run pack:employee",
     "start": "node server.js",
+    "server": "node server.js",
     "dist": "npm run pack"
   },
   "dependencies": {
