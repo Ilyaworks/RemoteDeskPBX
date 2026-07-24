@@ -1,5 +1,9 @@
 appId: com.remotedeskpbx.employee
 productName: RemoteDeskPBX-Employee
+compression: maximum
+electronLanguages:
+  - en-US
+  - ru
 extraMetadata:
   main: dist/main/employee.js
 directories:

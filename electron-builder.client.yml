@@ -1,5 +1,9 @@
 appId: com.remotedeskpbx.client
 productName: RemoteDeskPBX-Client
+compression: maximum
+electronLanguages:
+  - en-US
+  - ru
 extraMetadata:
   main: dist/main/client.js
 directories:
