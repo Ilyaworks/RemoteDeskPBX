@@ -17,8 +17,6 @@ const App: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const codeRef = useRef('');
-  const sessionIdRef = useRef('');
-  const autoShotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const addLog = (msg: string) => setLog(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -104,40 +102,8 @@ const App: React.FC = () => {
     return canvas.toDataURL('image/jpeg', quality);
   };
 
-  // ===== T8: авто-скриншоты каждые 30с на сервер =====
-  const AUTO_SHOT_INTERVAL_MS = 30000;
-
-  const captureAndUpload = async () => {
-    const sessionId = sessionIdRef.current;
-    if (!sessionId) { addLog('⚠️ Авто-скриншот: нет sessionId — пропуск'); return; }
-    try {
-      const image = await grabFrameDataUrl(0, 0.6);
-      if (!image) { addLog('Авто-скриншот: кадр ещё не готов — пропуск'); return; }
-      const res = await fetch(`${API}/screenshot`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, image, timestamp: Date.now() }),
-        signal: AbortSignal.timeout(15000),
-      });
-      const j = await res.json().catch(() => ({} as any));
-      addLog(`📸 Авто-скриншот отправлен (${j.type || res.status})`);
-    } catch (err: any) {
-      addLog(`Авто-скриншот: ошибка ${err.message}`);
-    }
-  };
-
-  const startAutoScreenshots = () => {
-    if (autoShotTimerRef.current) return;
-    // первый снимок через 3с (даём видеопотоку прогреться), далее каждые 30с
-    setTimeout(() => { captureAndUpload(); }, 3000);
-    autoShotTimerRef.current = setInterval(captureAndUpload, AUTO_SHOT_INTERVAL_MS);
-    addLog('Авто-скриншоты включены (каждые 30с)');
-  };
-
   const cleanup = useCallback(() => {
     pollingRef.current = false;
-    if (autoShotTimerRef.current) { clearInterval(autoShotTimerRef.current); autoShotTimerRef.current = null; }
-    sessionIdRef.current = '';
     dcRef.current?.close();
     dcRef.current = null;
     chatDcRef.current?.close();
@@ -186,14 +152,9 @@ const App: React.FC = () => {
 
       const code = reg.code;
       codeRef.current = code;
-      sessionIdRef.current = reg.sessionId || '';
       setRoomCode(code);
       setStatus('waiting');
       addLog(`Код комнаты: ${code}`);
-
-      // T8: авто-скриншоты этого сеанса на сервер
-      if (sessionIdRef.current) startAutoScreenshots();
-      else addLog('⚠️ Сервер не вернул sessionId — авто-скриншоты недоступны (обновите сервер)');
 
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;

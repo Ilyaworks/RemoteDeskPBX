@@ -9,11 +9,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 const PORT = process.env.PORT || 3000;
-const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
 const DATA_DIR = path.join(__dirname, 'data');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(SCREENSHOTS_DIR)) fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
 function readJSON(file) {
   try {
@@ -86,7 +84,7 @@ app.post('/register', (req, res) => {
   sessions.push({ id, code, employee: null, employeeName: null, startTime: new Date().toISOString(), endTime: null, duration: null, durationSeconds: null });
   writeJSON('sessions.json', sessions);
   addMessage('host', code, { type: 'code', code });
-  res.json({ type: 'code', code, sessionId: id });
+  res.json({ type: 'code', code });
 });
 
 app.post('/join', (req, res) => {
@@ -199,25 +197,6 @@ app.get('/admin/sessions', requireAdmin, (req, res) => {
   res.json(sessions);
 });
 
-app.get('/admin/sessions/:id/screenshots', requireAdmin, (req, res) => {
-  const sessionId = req.params.id;
-  const dir = path.join(SCREENSHOTS_DIR, sessionId);
-  if (!fs.existsSync(dir)) return res.json([]);
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.jpg')).sort();
-  res.json(files.map(f => ({ filename: f, url: `/screenshots/${sessionId}/${f}`, time: f.replace('.jpg', '') })));
-});
-
-app.use('/screenshots', express.static(SCREENSHOTS_DIR));
-
-app.post('/screenshot', (req, res) => {
-  const { sessionId, image, timestamp } = req.body;
-  if (!sessionId || !image) return res.json({ type: 'error' });
-  const dir = path.join(SCREENSHOTS_DIR, sessionId);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${timestamp || Date.now()}.jpg`), image.replace(/^data:image\/jpeg;base64,/, ''), 'base64');
-  res.json({ type: 'ok' });
-});
-
 // Admin web page
 app.get('/admin', (req, res) => {
   res.send(`<!DOCTYPE html>
@@ -257,20 +236,6 @@ app.get('/admin', (req, res) => {
     .tab.active { color: #1a73e8; border-bottom-color: #1a73e8; }
     .inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
     .inline-form input { flex: 1; min-width: 120px; }
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; cursor: zoom-out; }
-    .modal-overlay.active { display: flex; }
-    .modal-overlay img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 4px; cursor: zoom-out; }
-    .modal-overlay .nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .modal-overlay .nav-btn:hover { background: rgba(255,255,255,0.3); }
-    .modal-overlay .nav-prev { left: 20px; }
-    .modal-overlay .nav-next { right: 20px; }
-    .modal-overlay .close-btn { position: absolute; top: 15px; right: 25px; font-size: 40px; color: white; cursor: pointer; font-weight: bold; opacity: 0.7; }
-    .modal-overlay .close-btn:hover { opacity: 1; }
-    .gallery { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-    .gallery-item { width: 150px; height: 100px; overflow: hidden; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
-    .gallery-item:hover { border-color: #1a73e8; }
-    .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
-    .gallery-item-wrap { position: relative; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
     .badge-active { background: #e6f4ea; color: #34a853; }
     .badge-inactive { background: #fce8e6; color: #ea4335; }
@@ -282,14 +247,8 @@ app.get('/admin', (req, res) => {
 </head>
 <body>
   <div id="app"></div>
-  <div id="modal" class="modal-overlay">
-    <span class="close-btn" onclick="closeModal()">&times;</span>
-    <button class="nav-btn nav-prev" onclick="navModal(-1)">&#8249;</button>
-    <img id="modal-img" src="" onclick="closeModal()" alt="screenshot">
-    <button class="nav-btn nav-next" onclick="navModal(1)">&#8250;</button>
-  </div>
   <script>
-    let token = '', employees = [], sessions = [], screenshots = [], currentScreenshotIndex = 0, currentTab = 'employees', filterEmployee = '';
+    let token = '', employees = [], sessions = [], currentTab = 'employees', filterEmployee = '';
 
     function fmt(s) { if (!s && s!==0) return '...'; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), s2=s%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s2).padStart(2,'0'); }
     function dt(iso) { return iso ? new Date(iso).toLocaleString('ru-RU') : '-'; }
@@ -348,7 +307,7 @@ app.get('/admin', (req, res) => {
     }
 
     function renderSessions(c) {
-      c.innerHTML = '<div class="card"><div class="card-header"><h2>📊 Сессии'+(filterEmployee?' сотрудника "'+filterEmployee+'"':'')+' ('+sessions.length+')</h2><div>'+(filterEmployee?'<button class="btn btn-warning btn-sm" onclick="clearFilter()">✕ Сбросить</button>':'')+'</div></div><table><thead><tr><th>Код</th><th>Сотрудник</th><th>Начало</th><th>Конец</th><th>Длительность</th><th>Скриншоты</th></tr></thead><tbody>'+sessions.slice().reverse().map(s=>{const d=s.durationSeconds!==null?fmt(s.durationSeconds):(s.endTime?'-':'🟢 Активна'); return '<tr><td style="font-family:monospace">'+(s.code||'-')+'</td><td>'+(s.employeeName||s.employee||'-')+'</td><td>'+dt(s.startTime)+'</td><td>'+dt(s.endTime)+'</td><td><span class="duration-format">'+d+'</span></td><td><button class="btn btn-primary btn-sm" onclick="loadScreenshots(\\''+s.id+'\\')">📸 Смотреть</button></td></tr>';}).join('')+(sessions.length===0?'<tr><td colspan="6" class="empty-state">Нет сессий</td></tr>':'')+'</tbody></table></div><div id="screenshots-section"></div>';
+      c.innerHTML = '<div class="card"><div class="card-header"><h2>📊 Сессии'+(filterEmployee?' сотрудника "'+filterEmployee+'"':'')+' ('+sessions.length+')</h2><div>'+(filterEmployee?'<button class="btn btn-warning btn-sm" onclick="clearFilter()">✕ Сбросить</button>':'')+'</div></div><table><thead><tr><th>Код</th><th>Сотрудник</th><th>Начало</th><th>Конец</th><th>Длительность</th></tr></thead><tbody>'+sessions.slice().reverse().map(s=>{const d=s.durationSeconds!==null?fmt(s.durationSeconds):(s.endTime?'-':'🟢 Активна'); return '<tr><td style="font-family:monospace">'+(s.code||'-')+'</td><td>'+(s.employeeName||s.employee||'-')+'</td><td>'+dt(s.startTime)+'</td><td>'+dt(s.endTime)+'</td><td><span class="duration-format">'+d+'</span></td></tr>';}).join('')+(sessions.length===0?'<tr><td colspan="5" class="empty-state">Нет сессий</td></tr>':'')+'</tbody></table></div>';
     }
 
     function renderSettings(c) {
@@ -389,19 +348,6 @@ app.get('/admin', (req, res) => {
       if (r.type==='ok') { token='Bearer '+b; sessionStorage.setItem('rdpbx_admin_token', token); document.getElementById('cur-pass').value=''; document.getElementById('new-pass-admin').value=''; }
     }
 
-    async function loadScreenshots(id) {
-      if (!id) return;
-      screenshots = await (await fetch('/admin/sessions/'+id+'/screenshots', {headers:{Authorization:token}})).json();
-      const sec = document.getElementById('screenshots-section');
-      if (!screenshots.length) { sec.innerHTML='<div class="card"><p style="color:#999">Нет скриншотов</p></div>'; return; }
-      sec.innerHTML = '<div class="card"><div class="card-header"><h2>📸 Скриншоты ('+screenshots.length+')</h2></div><div class="gallery">'+screenshots.map((s,i)=>'<div class="gallery-item-wrap"><div class="gallery-item" onclick="openModal('+i+')"><img src="'+s.url+'" loading="lazy"></div><div style="font-size:10px;color:#999;margin-top:2px;text-align:center">'+new Date(parseInt(s.time)).toLocaleString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</div></div>').join('')+'</div></div>';
-    }
-
-    function openModal(i) { currentScreenshotIndex=i; document.getElementById('modal-img').src=screenshots[i].url; document.getElementById('modal').classList.add('active'); document.body.style.overflow='hidden'; }
-    function closeModal() { document.getElementById('modal').classList.remove('active'); document.body.style.overflow=''; }
-    function navModal(d) { const n=currentScreenshotIndex+d; if (n<0||n>=screenshots.length) return; openModal(n); }
-    document.addEventListener('keydown',e=>{ const m=document.getElementById('modal'); if(!m.classList.contains('active')) return; if(e.key==='Escape') closeModal(); if(e.key==='ArrowLeft') navModal(-1); if(e.key==='ArrowRight') navModal(1); });
-    document.getElementById('modal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(); });
     initAuth();
   </script>
 </body>

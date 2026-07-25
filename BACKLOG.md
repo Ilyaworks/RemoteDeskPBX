@@ -54,6 +54,15 @@
 ### T11 — Админка: кнопка «Выйти» + не разлогинивать при F5 · P1 · done
 **Сделано:** токен админа хранится в `sessionStorage` (`rdpbx_admin_token`), при загрузке `initAuth()` восстанавливает сессию (обновление страницы не выкидывает); кнопка «Выйти» в шапке чистит токен и возвращает на логин; смена пароля обновляет сохранённый токен. Проверено в браузере, задеплоено на прод.
 
+### T12 — Убрать авто-скриншоты (оставить ручной сотрудника) · P1 · done
+**Задача пользователя:** авто-скриншоты каждые 30с не нужны; сотрудник должен мочь сделать скриншот сам.
+**Сделано (откат T8):**
+- **Client** (`src/client/App.tsx`): удалены `autoShotTimerRef`, `sessionIdRef`, `AUTO_SHOT_INTERVAL_MS`, `captureAndUpload`, `startAutoScreenshots` и их вызовы; клиент больше не шлёт `POST /screenshot` и не читает `sessionId`. Ручной путь (DataChannel `screenshot`: `screenshot-request` → `takeScreenshot` → `grabFrameDataUrl`) **сохранён**.
+- **Server** (`server.js`): удалены `SCREENSHOTS_DIR`, `POST /screenshot`, `GET /admin/sessions/:id/screenshots`, статик `/screenshots`; `/register` больше не возвращает `sessionId`.
+- **Админка:** убраны колонка «Скриншоты» + кнопка «📸 Смотреть», секция галереи, модалка просмотра, стейт `screenshots`/`currentScreenshotIndex`, функции `loadScreenshots/openModal/closeModal/navModal` и их CSS.
+**Проверено:** `node --check`, `npm run build` без ошибок; локально `/register` без `sessionId`, `/screenshot`→404, `/admin` рендерится (вкладка «Сессии» без «Скриншотов», консоль чистая).
+**Остаётся:** пересобрать client.exe + задеплоить server.js на прод (`remotedeskpbx-server/main`). Employee не менялся — пересборка не нужна. Снимает актуальность **T8-storage** (внешнее хранилище больше не требуется).
+
 ---
 
 ## Процесс (п.11–12)
