@@ -11,10 +11,10 @@
   - Админка: убраны колонка/кнопка/галерея/модалка скриншотов + мёртвый CSS/JS.
 - **Тесты пройдены:** `node --check server.js`, `npm run build` (tsc+webpack) — без ошибок. Локальный прогон (`PORT=3987`): `/register`→только `code`, `/screenshot`→404, `/admin`→200; в браузере вкладка «Сессии» без «Скриншотов», консоль без ошибок.
 
-### Осталось по T12 (деплой/сборка)
-- **Пересобрать client.exe** (`npm run pack:client`) — менялся код клиента. Employee НЕ менялся.
-- **Задеплоить server.js на прод**: скопировать в клон `remotedeskpbx-server` → `git push origin main`. Проверить `/register` (нет `sessionId`) и `/admin`.
-- Коммит в master репо `RemoteDeskPBX`.
+### Деплой/сборка — ВЫПОЛНЕНО
+- Коммит в master `RemoteDeskPBX`: `49ac82c`, запушен.
+- Прод `remotedeskpbx-server/main`: `04d6dc3`, запушен, Render передеплоил. Проверено вживую: `/`→`express-v2`, `/register`→только `code`, `/screenshot`→404.
+- **client.exe пересобран**: `release/RemoteDeskPBX-Client-2.0.0.exe` (67.6 МБ, 2026-07-25 06:44). Employee НЕ менялся — не пересобирался.
 
 ### Прочее
 - **T8-storage** снят с повестки — авто-скриншотов больше нет, внешнее хранилище не нужно.
