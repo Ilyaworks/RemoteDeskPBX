@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mouseScroll: (delta: number) => ipcRenderer.send('mouse-scroll', delta),
   keyPress: (keycode: number) => ipcRenderer.send('key-press', keycode),
 
+  // T7: сохранение скриншота в Документы (employee, ручной)
+  saveScreenshot: (dataUrl: string, code: string) => ipcRenderer.invoke('save-screenshot', dataUrl, code),
+
   // T1: сохранение учётных данных сотрудника (employee, safeStorage)
   credsSave: (data: { login: string; password: string }) => ipcRenderer.invoke('creds-save', data),
   credsLoad: (): Promise<{ login: string; password: string } | null> => ipcRenderer.invoke('creds-load'),

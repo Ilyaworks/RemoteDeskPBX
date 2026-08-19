@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const chatDcRef = useRef<RTCDataChannel | null>(null);
+  const screenshotDcRef = useRef<RTCDataChannel | null>(null);
   const pollingRef = useRef(false);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -265,6 +266,25 @@ const App: React.FC = () => {
             } catch {}
           };
           channel.onopen = () => addLog('Канал чата открыт');
+        } else if (channel.label === 'screenshot') {
+          screenshotDcRef.current = channel;
+          channel.onmessage = (ev) => {
+            try {
+              const msg = JSON.parse(ev.data);
+              if (msg.type === 'screenshot-data') {
+                setLastScreenshot(msg.data);
+                addLog('📸 Скриншот получен');
+                // T7: сохраняем в Документы/RemoteDeskPBX/<код>/
+                const api = (window as any).electronAPI;
+                if (api?.saveScreenshot) {
+                  api.saveScreenshot(msg.data, inputCode).then((r: any) => {
+                    if (r?.ok) addLog(`💾 Сохранён: ${r.file}`);
+                    else addLog(`Не удалось сохранить скриншот: ${r?.error || ''}`);
+                  }).catch(() => {});
+                }
+              }
+            } catch {}
+          };
         }
       };
 
@@ -279,9 +299,20 @@ const App: React.FC = () => {
     }
   };
 
+  const requestScreenshot = () => {
+    const dc = screenshotDcRef.current;
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({ type: 'screenshot-request' }));
+      addLog('📸 Запрос скриншота...');
+    } else {
+      addLog('Скриншот недоступен: канал ещё не готов');
+    }
+  };
+
   // Чат
   const [chatMessages, setChatMessages] = useState<{from: string; text: string}[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [lastScreenshot, setLastScreenshot] = useState<string | null>(null);
 
   const sendChat = () => {
     if (!chatInput.trim()) return;
@@ -473,6 +504,29 @@ const App: React.FC = () => {
               <video ref={remoteVideoRef} autoPlay style={{ width: isFullscreen ? 'auto' : '100%', maxWidth: '100%', maxHeight: isFullscreen ? '100vh' : '80vh', display: 'block', pointerEvents: 'none' }} />
             </div>
           )}
+        </div>
+
+        {/* Боковая панель: скриншот (ручной) */}
+        <div style={{ width: 300, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ ...s.card, padding: 14 }}>
+            <h4 style={{ margin: '0 0 10px', color: colors.heading, fontFamily: font, fontSize: 14, fontWeight: 600 }}>📸 Скриншот</h4>
+            <button onClick={requestScreenshot}
+              style={{ ...s.btnPrimary, width: '100%', padding: 9, fontSize: 14 }}>
+              Сделать скриншот
+            </button>
+            {lastScreenshot && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: colors.success, marginBottom: 4 }}>
+                  ✅ Сохранён в Документы\RemoteDeskPBX\{inputCode || 'general'}\
+                </div>
+                <a href={lastScreenshot} download={`screenshot-${Date.now()}.jpg`}
+                  style={{ fontSize: 12, color: colors.green, cursor: 'pointer', fontWeight: 600 }}>
+                  💾 Скачать вручную
+                </a>
+                <img src={lastScreenshot} alt="screenshot" style={{ width: '100%', marginTop: 6, borderRadius: radius.sm, border: `1px solid ${colors.border}` }} />
+              </div>
+            )}
+          </div>
         </div>
 
       </div>

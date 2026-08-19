@@ -14,7 +14,7 @@
   1. Убрано «Вы — клиент»; клиент переименован без «Client» → окно/`<title>`/`productName`/`artifactName` = `RemoteDeskPBX`. **Exe теперь `release/RemoteDeskPBX-2.0.0.exe`** (старый `-Client-` удалён).
   2. Плоский индикатор связи (кружки вместо 🟢🟡🔴) в client и employee.
   3. Сотруднику — полноэкранный просмотр (кнопка «⛶ Во весь экран», Fullscreen API; управление работает и в fullscreen).
-  4. **Полностью удалён скриншот-функционал** (client/App, employee/App, employee.ts IPC `save-screenshot`, preload) — отменяет остаток T12.
+  4. Скриншоты: сперва вырезали весь функционал, **затем по уточнению пользователя вернули ручную кнопку «Сделать скриншот»** (client/App, employee/App, employee.ts IPC `save-screenshot`, preload — восстановлены). Авто-скриншотов нет. Итог = как в T12: только ручной скриншот сотрудника + сохранение в Документы\RemoteDeskPBX.
 
 ### Тесты — ПРОЙДЕНЫ
 - `node --check server.js` ✓, `npm run build` (tsc main + webpack client/employee) ✓ без ошибок/варнингов.

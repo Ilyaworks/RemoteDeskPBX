@@ -77,6 +77,32 @@ const App: React.FC = () => {
     }
   };
 
+  // ===== Снимок текущего кадра экрана из уже захваченного потока (для ручного скриншота) =====
+  // maxWidth>0 — уменьшить (для отправки по DataChannel, где есть лимит размера)
+  const grabFrameDataUrl = async (maxWidth = 0, jpegQuality = 0.6): Promise<string | null> => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    let sw = 0, sh = 0;
+    const video = localVideoRef.current;
+    let source: CanvasImageSource | null = null;
+    if (video && video.videoWidth && video.videoHeight) {
+      source = video; sw = video.videoWidth; sh = video.videoHeight;
+    } else {
+      const track = localStreamRef.current?.getVideoTracks()[0];
+      const IC = (window as any).ImageCapture;
+      if (!track || !IC) return null;
+      const bitmap = await new IC(track).grabFrame();
+      source = bitmap; sw = bitmap.width; sh = bitmap.height;
+    }
+    if (!source || !sw || !sh) return null;
+    let dw = sw, dh = sh;
+    if (maxWidth && sw > maxWidth) { dw = maxWidth; dh = Math.round(sh * (maxWidth / sw)); }
+    canvas.width = dw; canvas.height = dh;
+    ctx.drawImage(source, 0, 0, dw, dh);
+    return canvas.toDataURL('image/jpeg', jpegQuality);
+  };
+
   const cleanup = useCallback(() => {
     pollingRef.current = false;
     dcRef.current?.close();
@@ -170,6 +196,17 @@ const App: React.FC = () => {
         } catch {}
       };
 
+      // Data channel для скриншотов (ручной запрос от сотрудника)
+      const screenDc = pc.createDataChannel('screenshot', { ordered: true });
+      screenDc.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'screenshot-request') {
+            takeScreenshot(screenDc);
+          }
+        } catch {}
+      };
+
       pc.onicecandidate = (e) => {
         if (e.candidate) {
           apiPost('/signal', { code, type: 'ice-candidate', candidate: e.candidate.toJSON(), role: 'host' }).catch(() => {});
@@ -193,6 +230,21 @@ const App: React.FC = () => {
     } catch (err: any) {
       setError(err.message || 'Ошибка запуска');
       addLog(`ERROR: ${err.message}`);
+    }
+  };
+
+  const takeScreenshot = async (dc: RTCDataChannel) => {
+    try {
+      // Переиспользуем уже захваченный экран (без повторного запроса выбора),
+      // уменьшаем до 1280px по ширине, чтобы уложиться в лимит DataChannel.
+      const dataUrl = await grabFrameDataUrl(1280, 0.6);
+      if (!dataUrl) { addLog('Скриншот: кадр недоступен'); return; }
+      if (dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'screenshot-data', data: dataUrl }));
+        addLog('📸 Скриншот отправлен сотруднику');
+      }
+    } catch (err) {
+      addLog(`Ошибка скриншота: ${(err as any).message}`);
     }
   };
 

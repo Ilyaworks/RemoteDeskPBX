@@ -70,6 +70,23 @@ ipcMain.on('key-press', async (_e, keycode: number) => {
   } catch (err) { console.error('key-press error:', err); }
 });
 
+// ============ T7: сохранение скриншотов в Документы (ручной скриншот сотрудника) ============
+ipcMain.handle('save-screenshot', async (_e, dataUrl: string, code: string) => {
+  try {
+    if (!dataUrl) return { ok: false, error: 'empty' };
+    const safeCode = (code || 'general').replace(/[^0-9A-Za-zА-Яа-я_-]/g, '') || 'general';
+    const dir = path.join(app.getPath('documents'), 'RemoteDeskPBX', safeCode);
+    fs.mkdirSync(dir, { recursive: true });
+    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const file = path.join(dir, `${Date.now()}.jpg`);
+    fs.writeFileSync(file, base64, 'base64');
+    return { ok: true, file };
+  } catch (err: any) {
+    console.error('save-screenshot error:', err);
+    return { ok: false, error: err.message };
+  }
+});
+
 // ============ T1: хранение учётных данных сотрудника (safeStorage) ============
 const credsPath = () => path.join(app.getPath('userData'), 'employee-creds.bin');
 
