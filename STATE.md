@@ -11,11 +11,13 @@
 - `pg` добавлен в deploy package.json (обязательно для Render) и dev devDependencies.
 
 ### Деплой/сборка
-- Прод `remotedeskpbx-server/main`: `c730b63`, запушен. Пока БЕЗ `DATABASE_URL` → работает в файловом режиме (эфемерно, без регрессий). После установки ключа Neon → Postgres.
-- **Требуется от пользователя:** создать бесплатный Neon (Postgres) → вписать `DATABASE_URL` в Environment сервиса `remotedeskpbx-server` на Render → авто-редеплой → `GET /` покажет `"storage":"pg"`, данные перестанут пропадать.
+- Прод `remotedeskpbx-server/main`: `c730b63`, запушен. Client.exe пересобран (кнопка копирования).
+- **Neon подключён (19.08.2026):** пользователь завёл Neon и вписал `DATABASE_URL` в Environment сервиса `remotedeskpbx-server` на Render. Прод: `GET /` → `"storage":"pg"`.
 
-### Как проверить постоянство
-- После установки `DATABASE_URL`: создать сотрудника в админке → в Render нажать Manual Deploy/Restart → сотрудник и сессии на месте. `GET https://remotedeskpbx-server.onrender.com/` → `"storage":"pg"`.
+### Проверено — постоянство работает
+- Сотрудник, добавленный через прод-`/admin` (пароль admin123), читается напрямую из таблицы `kv` в Neon → данные во внешней БД, рестарты/редеплои Render их НЕ стирают. **T13 закрыт.**
+- Грабли: сервис `remotedeskpbx-server` в Render не виден в списке, пока не «зайти в проект» (workspace). `frienddesk-server` — ЧУЖОЙ проект (FriendDesk), НЕ трогать/не удалять (его сервер отвечает `frienddesk-signal`).
+- Осталось не срочно: пароли сотрудников — открытым текстом (захешировать); ключ Neon засветился в чате → сделать Reset password в Neon и обновить `DATABASE_URL`.
 
 ---
 
