@@ -206,43 +206,56 @@ app.get('/admin', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RemoteDeskPBX Admin</title>
   <style>
+    :root {
+      --green: #00BB20; --green-hover: #06A81F; --green-dark: #049A1B;
+      --navy: #262C44; --indigo: #4E4963;
+      --heading: #2F2F36; --text: #3A3A42; --muted: #8A8A94;
+      --app-bg: #FAFAFA; --card: #FFFFFF; --subtle: #F5F6FA; --border: #E6E7EE;
+      --green-tint: #ECF8EE; --lavender: #F0F1FF; --peach: #FFF5F1;
+      --danger: #E5484D; --danger-tint: #FDECEC; --warning: #E8A800;
+      --font: 'Montserrat','Segoe UI',Roboto,Arial,sans-serif;
+      --radius: 12px;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f2f5; }
-    h1 { color: #1a73e8; margin-bottom: 20px; font-size: 24px; }
-    h2 { color: #333; font-size: 18px; margin-bottom: 15px; }
-    .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
-    .btn:hover { opacity: 0.85; }
-    .btn-primary { background: #1a73e8; color: white; }
-    .btn-danger { background: #ea4335; color: white; }
-    .btn-success { background: #34a853; color: white; }
-    .btn-warning { background: #fbbc04; color: #333; }
-    .btn-sm { padding: 4px 10px; font-size: 12px; }
-    input { padding: 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; outline: none; }
-    input:focus { border-color: #1a73e8; }
+    body { font-family: var(--font); padding: 24px; background: var(--app-bg); color: var(--text); }
+    h1 { color: var(--navy); margin-bottom: 20px; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+    h2 { color: var(--heading); font-size: 18px; font-weight: 600; margin-bottom: 15px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(38,44,68,0.06), 0 1px 2px rgba(38,44,68,0.04); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .btn { padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: var(--font); transition: background .15s ease, opacity .15s ease; }
+    .btn:hover { opacity: 0.92; }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:hover { background: var(--green-hover); opacity: 1; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-success:hover { background: var(--green-hover); opacity: 1; }
+    .btn-warning { background: var(--peach); color: var(--warning); border: 1px solid var(--warning); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+    input { padding: 9px 13px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: var(--font); color: var(--heading); background: #fff; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+    input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0,187,32,0.12); }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
-    th { background: #f8f9fa; font-weight: 600; color: #555; }
-    tr:hover td { background: #f5f8ff; }
-    .login-form { max-width: 320px; margin: 120px auto; }
-    .login-form h2 { text-align: center; margin-bottom: 25px; }
+    th, td { padding: 11px 13px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: var(--subtle); font-weight: 600; color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; }
+    tr:hover td { background: var(--lavender); }
+    .login-form { max-width: 340px; margin: 110px auto; }
+    .login-form h2 { text-align: center; margin-bottom: 24px; color: var(--navy); }
     .login-form input { width: 100%; margin-bottom: 12px; }
-    .login-form .btn { width: 100%; padding: 12px; font-size: 16px; }
-    .error { color: #ea4335; background: #fce8e6; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; }
-    .success { color: #34a853; background: #e6f4ea; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; }
-    .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
-    .tab { padding: 12px 24px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 500; color: #666; }
-    .tab.active { color: #1a73e8; border-bottom-color: #1a73e8; }
-    .inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
+    .login-form .btn { width: 100%; padding: 13px; font-size: 16px; }
+    .error { color: var(--danger); background: var(--danger-tint); padding: 10px 14px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; }
+    .success { color: var(--green-dark); background: var(--green-tint); padding: 10px 14px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 12px 22px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 600; color: var(--muted); transition: color .15s ease; }
+    .tab:hover { color: var(--heading); }
+    .tab.active { color: var(--green-dark); border-bottom-color: var(--green); }
+    .inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
     .inline-form input { flex: 1; min-width: 120px; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-    .badge-active { background: #e6f4ea; color: #34a853; }
-    .badge-inactive { background: #fce8e6; color: #ea4335; }
-    .duration-format { font-family: monospace; font-size: 12px; color: #555; }
-    .employee-link { color: #1a73e8; cursor: pointer; text-decoration: none; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-active { background: var(--green-tint); color: var(--green-dark); }
+    .badge-inactive { background: var(--danger-tint); color: var(--danger); }
+    .duration-format { font-family: 'Cascadia Code',Consolas,monospace; font-size: 12px; color: var(--indigo); }
+    .employee-link { color: var(--green-dark); cursor: pointer; text-decoration: none; font-weight: 600; }
     .employee-link:hover { text-decoration: underline; }
-    .empty-state { text-align: center; padding: 40px; color: #999; font-size: 14px; }
+    .empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
   </style>
 </head>
 <body>

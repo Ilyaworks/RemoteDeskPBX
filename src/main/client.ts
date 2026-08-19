@@ -152,7 +152,7 @@ async function createWindow() {
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.js'),
     },
-    title: 'RemoteDeskPBX Client',
+    title: 'RemoteDeskPBX',
   });
   mainWindow.on('closed', () => { mainWindow = null; });
 

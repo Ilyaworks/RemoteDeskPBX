@@ -1,5 +1,5 @@
 appId: com.remotedeskpbx.client
-productName: RemoteDeskPBX-Client
+productName: RemoteDeskPBX
 compression: maximum
 electronLanguages:
   - en-US
@@ -21,4 +21,4 @@ win:
       arch:
         - x64
 portable:
-  artifactName: "RemoteDeskPBX-Client-${version}.${ext}"
+  artifactName: "RemoteDeskPBX-${version}.${ext}"

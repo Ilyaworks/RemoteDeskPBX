@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { colors, font, mono, radius, s, quality } from '../shared/theme';
 
 const API = 'https://remotedeskpbx-server.onrender.com';
 
@@ -21,13 +22,14 @@ const App: React.FC = () => {
   const [connectionQuality, setConnectionQuality] = useState('');
   const [rtt, setRtt] = useState(0);
   const [packetLoss, setPacketLoss] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const chatDcRef = useRef<RTCDataChannel | null>(null);
-  const screenshotDcRef = useRef<RTCDataChannel | null>(null);
   const pollingRef = useRef(false);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const lastMouseRef = useRef({ x: -1, y: -1 });
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -234,9 +236,9 @@ const App: React.FC = () => {
       pc.oniceconnectionstatechange = () => {
         const state = pc.iceConnectionState;
         addLog(`ICE: ${state}`);
-        if (state === 'connected') setConnectionQuality('🟢 Отличное');
-        else if (state === 'checking') setConnectionQuality('🟡 Среднее');
-        else if (state === 'disconnected') setConnectionQuality('🔴 Плохое');
+        if (state === 'connected') setConnectionQuality('good');
+        else if (state === 'checking') setConnectionQuality('ok');
+        else if (state === 'disconnected') setConnectionQuality('bad');
       };
       pc.onconnectionstatechange = () => {
         setStatus(pc.connectionState);
@@ -263,25 +265,6 @@ const App: React.FC = () => {
             } catch {}
           };
           channel.onopen = () => addLog('Канал чата открыт');
-        } else if (channel.label === 'screenshot') {
-          screenshotDcRef.current = channel;
-          channel.onmessage = (ev) => {
-            try {
-              const msg = JSON.parse(ev.data);
-              if (msg.type === 'screenshot-data') {
-                setLastScreenshot(msg.data);
-                addLog('📸 Скриншот получен');
-                // T7: сохраняем в Документы/RemoteDeskPBX/<код>/
-                const api = (window as any).electronAPI;
-                if (api?.saveScreenshot) {
-                  api.saveScreenshot(msg.data, inputCode).then((r: any) => {
-                    if (r?.ok) addLog(`💾 Сохранён: ${r.file}`);
-                    else addLog(`Не удалось сохранить скриншот: ${r?.error || ''}`);
-                  }).catch(() => {});
-                }
-              }
-            } catch {}
-          };
         }
       };
 
@@ -296,20 +279,9 @@ const App: React.FC = () => {
     }
   };
 
-  const requestScreenshot = () => {
-    const dc = screenshotDcRef.current;
-    if (dc && dc.readyState === 'open') {
-      dc.send(JSON.stringify({ type: 'screenshot-request' }));
-      addLog('📸 Запрос скриншота...');
-    } else {
-      addLog('Скриншот недоступен: канал ещё не готов');
-    }
-  };
-
   // Чат
   const [chatMessages, setChatMessages] = useState<{from: string; text: string}[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [lastScreenshot, setLastScreenshot] = useState<string | null>(null);
 
   const sendChat = () => {
     if (!chatInput.trim()) return;
@@ -318,6 +290,20 @@ const App: React.FC = () => {
     setChatInput('');
     addLog(`💬 Я: ${chatInput}`);
   };
+
+  // Полноэкранный режим просмотра экрана клиента
+  const toggleFullscreen = () => {
+    const el = viewerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
+    else document.exitFullscreen?.();
+  };
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
@@ -333,9 +319,10 @@ const App: React.FC = () => {
   // Пока проверяем сохранённые данные — показываем сплэш, а не форму логина
   if (checkingCreds) {
     return (
-      <div style={{ padding: '80px 40px', fontFamily: 'Arial', textAlign: 'center' }}>
-        <h1 style={{ color: '#34a853', fontSize: '28px' }}>🛠️ RemoteDeskPBX</h1>
-        <p style={{ color: '#888', marginTop: '12px' }}>Загрузка…</p>
+      <div style={{ ...s.page, minHeight: '100vh', padding: '96px 40px', textAlign: 'center' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🛠️</div>
+        <h1 style={s.h1}>RemoteDeskPBX</h1>
+        <p style={{ ...s.subtitle, marginTop: 12 }}>Загрузка…</p>
       </div>
     );
   }
@@ -343,25 +330,30 @@ const App: React.FC = () => {
   // Экран логина
   if (!loggedIn) {
     return (
-      <div style={{ padding: '40px', fontFamily: 'Arial', maxWidth: '360px', margin: '0 auto', textAlign: 'center' }}>
-        <h1 style={{ color: '#34a853', fontSize: '28px' }}>🛠️ RemoteDeskPBX</h1>
-        <p style={{ color: '#888', marginBottom: '30px' }}>Авторизация сотрудника</p>
-        {authError && <div style={{ color: '#ea4335', background: '#fce8e6', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{authError}</div>}
-        <input value={login} onChange={e => setLogin(e.target.value)}
-          placeholder="Логин" autoComplete="username"
-          style={{ width: '100%', padding: '12px', marginBottom: '10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '16px', boxSizing: 'border-box' }} />
-        <input value={password} onChange={e => setPassword(e.target.value)}
-          type="password" placeholder="Пароль" autoComplete="current-password"
-          onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          style={{ width: '100%', padding: '12px', marginBottom: '12px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '16px', boxSizing: 'border-box' }} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px', fontSize: '14px', color: '#555', cursor: 'pointer', userSelect: 'none' }}>
-          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-          Запомнить меня (вход без пароля при следующем запуске)
-        </label>
-        <button onClick={() => handleLogin()}
-          style={{ width: '100%', padding: '14px', background: '#34a853', color: 'white', border: 'none', borderRadius: '6px', fontSize: '18px', cursor: 'pointer' }}>
-          Войти
-        </button>
+      <div style={{ ...s.page, minHeight: '100vh', padding: '56px 24px', textAlign: 'center' }}>
+        <div style={{ maxWidth: 380, margin: '0 auto' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🛠️</div>
+          <h1 style={s.h1}>RemoteDeskPBX</h1>
+          <p style={{ ...s.subtitle, marginBottom: 28 }}>Панель специалиста поддержки</p>
+          <div style={{ ...s.card, padding: 24, textAlign: 'left' }}>
+            {authError && <div style={{ ...s.bannerError, marginBottom: 15 }}>{authError}</div>}
+            <input value={login} onChange={e => setLogin(e.target.value)}
+              placeholder="Логин" autoComplete="username"
+              style={{ ...s.input, width: '100%', padding: '12px 14px', marginBottom: 10 }} />
+            <input value={password} onChange={e => setPassword(e.target.value)}
+              type="password" placeholder="Пароль" autoComplete="current-password"
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              style={{ ...s.input, width: '100%', padding: '12px 14px', marginBottom: 12 }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, fontSize: 13, color: colors.muted, cursor: 'pointer', userSelect: 'none' }}>
+              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: colors.green }} />
+              Запомнить меня (вход без пароля при следующем запуске)
+            </label>
+            <button onClick={() => handleLogin()}
+              style={{ ...s.btnPrimary, width: '100%', padding: 14, fontSize: 16 }}>
+              Войти
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -369,30 +361,34 @@ const App: React.FC = () => {
   // Экран подключения к клиенту
   if (!status || status === 'disconnected' || status === 'failed') {
     return (
-      <div style={{ padding: '40px', fontFamily: 'Arial', maxWidth: '480px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-          <span style={{ fontSize: '13px', color: '#888' }}>👤 {empName || login}</span>
-          <button onClick={handleLogout}
-            style={{ padding: '4px 12px', background: 'transparent', color: '#ea4335', border: '1px solid #ea4335', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>
-            Выйти
-          </button>
-        </div>
-        <h1 style={{ color: '#34a853', fontSize: '28px', textAlign: 'center' }}>🛠️ RemoteDeskPBX</h1>
-        <p style={{ textAlign: 'center', color: '#888', marginBottom: '30px' }}>Введите код, который назвал клиент</p>
-        {error && <div style={{ color: '#ea4335', background: '#fce8e6', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{error}</div>}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          <input type="text" value={inputCode}
-            onChange={e => setInputCode(e.target.value.replace(/\D/g, '').slice(0, 9))}
-            placeholder="111 222 333"
-            onKeyDown={e => e.key === 'Enter' && handleConnect()}
-            style={{ flex: 1, padding: '12px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '18px', fontFamily: 'monospace', letterSpacing: '4px', textAlign: 'center' }} />
-          <button onClick={handleConnect}
-            style={{ padding: '12px 24px', background: '#34a853', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', cursor: 'pointer' }}>
-            Подключиться
-          </button>
-        </div>
-        <div style={{ background: '#1e1e1e', color: '#0f0', padding: '10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace', maxHeight: '300px', overflow: 'auto' }}>
-          {log.length === 0 ? <span style={{ color: '#666' }}>Логи появятся здесь</span> : log.map((l, i) => <div key={i}>{l}</div>)}
+      <div style={{ ...s.page, minHeight: '100vh', padding: '40px 24px' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <span style={{ fontSize: 13, color: colors.muted }}>👤 {empName || login}</span>
+            <button onClick={handleLogout}
+              style={{ ...s.btnGhost, padding: '5px 12px', fontSize: 12 }}>
+              Выйти
+            </button>
+          </div>
+          <h1 style={{ ...s.h1, textAlign: 'center' }}>RemoteDeskPBX</h1>
+          <p style={{ ...s.subtitle, textAlign: 'center', marginBottom: 28 }}>Введите код, который назвал клиент</p>
+          <div style={{ ...s.card, padding: 20 }}>
+            {error && <div style={{ ...s.bannerError, marginBottom: 15 }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input type="text" value={inputCode}
+                onChange={e => setInputCode(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                placeholder="111 222 333"
+                onKeyDown={e => e.key === 'Enter' && handleConnect()}
+                style={{ ...s.input, flex: 1, padding: 12, fontSize: 18, fontFamily: mono, letterSpacing: 4, textAlign: 'center' }} />
+              <button onClick={handleConnect}
+                style={{ ...s.btnPrimary, padding: '12px 24px', fontSize: 15 }}>
+                Подключиться
+              </button>
+            </div>
+          </div>
+          <div style={{ ...s.log, marginTop: 16, maxHeight: 300 }}>
+            {log.length === 0 ? <span style={{ color: colors.muted }}>Логи появятся здесь</span> : log.map((l, i) => <div key={i}>{l}</div>)}
+          </div>
         </div>
       </div>
     );
@@ -400,23 +396,33 @@ const App: React.FC = () => {
 
   // Основной экран — просмотр
   return (
-    <div style={{ padding: '15px', fontFamily: 'Arial' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <h2 style={{ color: '#34a853', margin: 0 }}>🛠️ Подключено к клиенту</h2>
-        <div style={{ fontSize: '13px', color: '#666' }}>
-          {connectionQuality} | RTT: {rtt}ms | Потери: {packetLoss}%
+    <div style={{ ...s.page, minHeight: '100vh', padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.green, display: 'inline-block' }} />
+          <h2 style={{ ...s.h1, fontSize: 18 }}>Подключено к клиенту</h2>
+        </div>
+        <div style={{ fontSize: 13, color: colors.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {connectionQuality && quality[connectionQuality] && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: quality[connectionQuality].color, display: 'inline-block' }} />
+              {quality[connectionQuality].label}
+            </span>
+          )}
+          <span>RTT: {rtt}ms · Потери: {packetLoss}%</span>
         </div>
       </div>
 
-      {error && <div style={{ color: '#ea4335', background: '#fce8e6', padding: '8px', borderRadius: '4px', marginBottom: '10px' }}>{error}</div>}
+      {error && <div style={{ ...s.bannerError, marginBottom: 10 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: '15px' }}>
+      <div style={{ display: 'flex', gap: 15 }}>
         {/* Видео */}
         <div style={{ flex: 1 }}>
-          {!remoteStream && <div style={{ padding: '60px', textAlign: 'center', background: '#f5f5f5', borderRadius: '8px', color: '#666', fontSize: '18px' }}>⏳ Ожидание видео...</div>}
+          {!remoteStream && <div style={{ ...s.card, padding: 60, textAlign: 'center', color: colors.muted, fontSize: 17 }}>⏳ Ожидание видео...</div>}
           {remoteStream && (
             <div
-              style={{ border: '1px solid #ccc', borderRadius: '8px', overflow: 'hidden', background: '#000', cursor: 'crosshair', outline: 'none' }}
+              ref={viewerRef}
+              style={{ position: 'relative', border: isFullscreen ? 'none' : `1px solid ${colors.border}`, borderRadius: isFullscreen ? 0 : radius.lg, overflow: 'hidden', background: '#000', cursor: 'crosshair', outline: 'none', display: isFullscreen ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', width: isFullscreen ? '100vw' : 'auto', height: isFullscreen ? '100vh' : 'auto' }}
               tabIndex={0}
               onMouseDown={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -460,62 +466,42 @@ const App: React.FC = () => {
                 sendDC({ type: 'keydown', keycode });
               }}
             >
-              <video ref={remoteVideoRef} autoPlay style={{ width: '100%', maxHeight: '80vh', display: 'block', pointerEvents: 'none' }} />
+              <button onClick={toggleFullscreen} onMouseDown={(e) => e.stopPropagation()} title="Развернуть подключение на весь экран"
+                style={{ position: 'absolute', top: 10, right: 10, zIndex: 2, background: 'rgba(38,44,68,0.72)', color: '#fff', border: 'none', borderRadius: radius.sm, padding: '6px 12px', fontSize: 13, fontFamily: font, fontWeight: 600, cursor: 'pointer' }}>
+                {isFullscreen ? '🡼 Свернуть' : '⛶ Во весь экран'}
+              </button>
+              <video ref={remoteVideoRef} autoPlay style={{ width: isFullscreen ? 'auto' : '100%', maxWidth: '100%', maxHeight: isFullscreen ? '100vh' : '80vh', display: 'block', pointerEvents: 'none' }} />
             </div>
           )}
         </div>
 
-        {/* Боковая панель: скриншот */}
-        <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Скриншот */}
-          <div style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
-            <h4 style={{ margin: '0 0 8px', color: '#555' }}>📸 Скриншот</h4>
-            <button onClick={requestScreenshot}
-              style={{ width: '100%', padding: '8px', background: '#34a853', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-              Сделать скриншот
-            </button>
-            {lastScreenshot && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '11px', color: '#34a853', marginBottom: '4px' }}>
-                  ✅ Сохранён в Документы\RemoteDeskPBX\{inputCode || 'general'}\
-                </div>
-                <a href={lastScreenshot} download={`screenshot-${Date.now()}.jpg`}
-                  style={{ fontSize: '12px', color: '#1a73e8', cursor: 'pointer' }}>
-                  💾 Скачать вручную
-                </a>
-                <img src={lastScreenshot} alt="screenshot" style={{ width: '100%', marginTop: '5px', borderRadius: '4px', border: '1px solid #ddd' }} />
-              </div>
-            )}
-          </div>
-
-        </div>
       </div>
 
       {/* T2: чат сотрудника — снизу в основном окне, во всю ширину */}
-      <div style={{ marginTop: '15px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
-        <h4 style={{ margin: '0 0 8px', color: '#555' }}>💬 Чат с клиентом</h4>
-        <div style={{ height: '120px', overflow: 'auto', marginBottom: '8px', background: '#f9f9f9', padding: '8px', borderRadius: '4px', fontSize: '13px' }}>
-          {chatMessages.length === 0 && <span style={{ color: '#aaa' }}>Нет сообщений</span>}
+      <div style={{ ...s.card, marginTop: 15, padding: 14 }}>
+        <h4 style={{ margin: '0 0 10px', color: colors.heading, fontFamily: font, fontSize: 14, fontWeight: 600 }}>💬 Чат с клиентом</h4>
+        <div style={{ height: 120, overflow: 'auto', marginBottom: 8, background: colors.subtle, padding: 10, borderRadius: radius.md, fontSize: 13, border: `1px solid ${colors.border}` }}>
+          {chatMessages.length === 0 && <span style={{ color: colors.muted }}>Нет сообщений</span>}
           {chatMessages.map((m, i) => (
-            <div key={i} style={{ margin: '2px 0', color: m.from === 'me' ? '#34a853' : '#1a73e8' }}>
+            <div key={i} style={{ margin: '3px 0', color: m.from === 'me' ? colors.success : colors.navy }}>
               {m.from === 'me' ? '🛠️ Я: ' : '👤 Клиент: '}{m.text}
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <input value={chatInput} onChange={e => setChatInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && sendChat()}
-            placeholder="Сообщение клиенту..." style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }} />
-          <button onClick={sendChat} style={{ padding: '8px 20px', background: '#34a853', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>Отправить</button>
+            placeholder="Сообщение клиенту..." style={{ ...s.input, flex: 1, padding: '9px 11px', fontSize: 14 }} />
+          <button onClick={sendChat} style={{ ...s.btnPrimary, padding: '9px 20px', fontSize: 14 }}>Отправить</button>
         </div>
       </div>
 
-      <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <button onClick={handleDisconnect} style={{ padding: '10px 20px', backgroundColor: '#ea4335', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>Отключиться</button>
-        <span style={{ fontSize: '12px', color: '#888' }}>Статус: {status}</span>
+      <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button onClick={handleDisconnect} style={{ ...s.btnDanger, padding: '10px 20px', fontSize: 15 }}>Отключиться</button>
+        <span style={{ fontSize: 12, color: colors.muted }}>Статус: {status}</span>
       </div>
 
-      <div style={{ marginTop: '10px', background: '#1e1e1e', color: '#0f0', padding: '10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace', maxHeight: '100px', overflow: 'auto' }}>
+      <div style={{ ...s.log, marginTop: 12, maxHeight: 100 }}>
         {log.map((l, i) => <div key={i}>{l}</div>)}
       </div>
     </div>
