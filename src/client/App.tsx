@@ -69,6 +69,12 @@ const App: React.FC = () => {
           await pcRef.current?.addIceCandidate(new RTCIceCandidate(msg.candidate));
           continue;
         }
+
+        if (msg.type === 'host-disconnected') {
+          addLog('Сотрудник отключился — сессия завершена');
+          cleanup(); // среди прочего прячет плавающее окно чата
+          break;
+        }
       } catch (err: any) {
         if (err.name === 'AbortError') continue;
         addLog(`Poll error: ${err.message}`);

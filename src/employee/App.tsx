@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { colors, font, mono, radius, s, quality } from '../shared/theme';
+import { colors, font, mono, radius, shadow, s, quality } from '../shared/theme';
 
 const API = 'https://remotedeskpbx-server.onrender.com';
 
@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [rtt, setRtt] = useState(0);
   const [packetLoss, setPacketLoss] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -340,6 +341,11 @@ const App: React.FC = () => {
     if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream]);
 
+  // Вкл/выкл звук клиента (управляем самим video-элементом)
+  useEffect(() => {
+    if (remoteVideoRef.current) remoteVideoRef.current.muted = audioMuted;
+  }, [audioMuted, remoteStream]);
+
   useEffect(() => () => cleanup(), []);
 
   const handleDisconnect = async () => {
@@ -453,7 +459,7 @@ const App: React.FC = () => {
           {remoteStream && (
             <div
               ref={viewerRef}
-              style={{ position: 'relative', border: isFullscreen ? 'none' : `1px solid ${colors.border}`, borderRadius: isFullscreen ? 0 : radius.lg, overflow: 'hidden', background: '#000', cursor: 'crosshair', outline: 'none', display: isFullscreen ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', width: isFullscreen ? '100vw' : 'auto', height: isFullscreen ? '100vh' : 'auto' }}
+              style={{ position: 'relative', border: isFullscreen ? 'none' : `1px solid ${colors.border}`, borderRadius: isFullscreen ? 0 : radius.lg, overflow: 'hidden', background: '#000', cursor: 'default', outline: 'none', display: isFullscreen ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', width: isFullscreen ? '100vw' : 'auto', height: isFullscreen ? '100vh' : 'auto' }}
               tabIndex={0}
               onMouseDown={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -497,6 +503,10 @@ const App: React.FC = () => {
                 sendDC({ type: 'keydown', keycode });
               }}
             >
+              <button onClick={() => setAudioMuted(m => !m)} onMouseDown={(e) => e.stopPropagation()} title="Звук клиента"
+                style={{ position: 'absolute', top: 10, left: 10, zIndex: 2, background: audioMuted ? 'rgba(229,72,77,0.85)' : 'rgba(38,44,68,0.72)', color: '#fff', border: 'none', borderRadius: radius.sm, padding: '6px 12px', fontSize: 13, fontFamily: font, fontWeight: 600, cursor: 'pointer' }}>
+                {audioMuted ? '🔇 Звук выкл' : '🔊 Звук вкл'}
+              </button>
               <button onClick={toggleFullscreen} onMouseDown={(e) => e.stopPropagation()} title="Развернуть подключение на весь экран"
                 style={{ position: 'absolute', top: 10, right: 10, zIndex: 2, background: 'rgba(38,44,68,0.72)', color: '#fff', border: 'none', borderRadius: radius.sm, padding: '6px 12px', fontSize: 13, fontFamily: font, fontWeight: 600, cursor: 'pointer' }}>
                 {isFullscreen ? '🡼 Свернуть' : '⛶ Во весь экран'}
@@ -531,22 +541,28 @@ const App: React.FC = () => {
 
       </div>
 
-      {/* T2: чат сотрудника — снизу в основном окне, во всю ширину */}
-      <div style={{ ...s.card, marginTop: 15, padding: 14 }}>
-        <h4 style={{ margin: '0 0 10px', color: colors.heading, fontFamily: font, fontSize: 14, fontWeight: 600 }}>💬 Чат с клиентом</h4>
-        <div style={{ height: 120, overflow: 'auto', marginBottom: 8, background: colors.subtle, padding: 10, borderRadius: radius.md, fontSize: 13, border: `1px solid ${colors.border}` }}>
-          {chatMessages.length === 0 && <span style={{ color: colors.muted }}>Нет сообщений</span>}
-          {chatMessages.map((m, i) => (
-            <div key={i} style={{ margin: '3px 0', color: m.from === 'me' ? colors.success : colors.navy }}>
-              {m.from === 'me' ? '🛠️ Я: ' : '👤 Клиент: '}{m.text}
-            </div>
-          ))}
+      {/* T2: чат сотрудника — снизу в основном окне, во всю ширину. Выделен, чтобы был заметен. */}
+      <div style={{ marginTop: 16, background: colors.card, border: `2px solid ${colors.green}`, borderRadius: radius.lg, boxShadow: shadow.elevated, overflow: 'hidden' }}>
+        <div style={{ background: colors.green, color: '#fff', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, fontFamily: font }}>
+          <span style={{ fontSize: 17, fontWeight: 700 }}>💬 Чат с клиентом</span>
+          <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.95, marginLeft: 'auto' }}>Пишите здесь — клиент увидит сообщение всплывающим окном на своём экране</span>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendChat()}
-            placeholder="Сообщение клиенту..." style={{ ...s.input, flex: 1, padding: '9px 11px', fontSize: 14 }} />
-          <button onClick={sendChat} style={{ ...s.btnPrimary, padding: '9px 20px', fontSize: 14 }}>Отправить</button>
+        <div style={{ padding: 16 }}>
+          <div style={{ height: 140, overflow: 'auto', marginBottom: 12, background: colors.subtle, padding: 12, borderRadius: radius.md, fontSize: 14, border: `1px solid ${colors.border}` }}>
+            {chatMessages.length === 0 && <span style={{ color: colors.muted }}>Сообщений пока нет — напишите клиенту первым.</span>}
+            {chatMessages.map((m, i) => (
+              <div key={i} style={{ margin: '4px 0', color: m.from === 'me' ? colors.success : colors.navy, fontWeight: 500 }}>
+                {m.from === 'me' ? '🛠️ Я: ' : '👤 Клиент: '}{m.text}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendChat()}
+              placeholder="Напишите сообщение клиенту и нажмите Enter…"
+              style={{ ...s.input, flex: 1, padding: '12px 14px', fontSize: 15, border: `2px solid ${colors.green}` }} />
+            <button onClick={sendChat} style={{ ...s.btnPrimary, padding: '12px 26px', fontSize: 15 }}>Отправить</button>
+          </div>
         </div>
       </div>
 
