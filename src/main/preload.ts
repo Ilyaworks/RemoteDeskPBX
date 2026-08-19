@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mouseScroll: (delta: number) => ipcRenderer.send('mouse-scroll', delta),
   keyPress: (keycode: number) => ipcRenderer.send('key-press', keycode),
 
+  // Копирование текста в буфер обмена (client — код подключения)
+  copyText: (text: string) => ipcRenderer.send('copy-text', text),
+
   // T7: сохранение скриншота в Документы (employee, ручной)
   saveScreenshot: (dataUrl: string, code: string) => ipcRenderer.invoke('save-screenshot', dataUrl, code),
 

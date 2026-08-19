@@ -13,41 +13,62 @@ const DATA_DIR = path.join(__dirname, 'data');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-function readJSON(file) {
-  try {
-    const p = path.join(DATA_DIR, file);
-    if (!fs.existsSync(p)) return [];
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch { return []; }
+// ── Постоянное хранилище ──────────────────────────────────────────────────
+// DATABASE_URL задан (напр. Neon Postgres) → пишем в Postgres (переживает рестарты).
+// Не задан → JSON-файлы в data/ (для локальной разработки; на Render эфемерно).
+const USE_PG = !!process.env.DATABASE_URL;
+let pool = null;
+if (USE_PG) {
+  const { Pool } = require('pg');
+  pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 }
 
-function writeJSON(file, data) {
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
-}
-
-const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
-function readConfig() {
-  try {
-    if (!fs.existsSync(CONFIG_PATH)) {
-      const def = { adminPassword: 'admin123' };
-      fs.writeFileSync(CONFIG_PATH, JSON.stringify(def));
-      return def;
-    }
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  } catch { return { adminPassword: 'admin123' }; }
-}
-
-function writeConfig(cfg) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
-}
-
-function requireAdmin(req, res, next) {
-  const cfg = readConfig();
-  const auth = req.headers.authorization;
-  if (auth !== `Bearer ${cfg.adminPassword}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+async function initStore() {
+  if (USE_PG) {
+    await pool.query('CREATE TABLE IF NOT EXISTS kv (key text PRIMARY KEY, value jsonb NOT NULL)');
+    console.log('  Storage: Postgres (DATABASE_URL) — данные переживают рестарты');
+  } else {
+    console.log('  Storage: локальные JSON-файлы (data/) — на Render эфемерно');
   }
-  next();
+}
+
+// key: 'sessions' | 'employees' | 'config'
+async function getKV(key, def) {
+  if (USE_PG) {
+    const r = await pool.query('SELECT value FROM kv WHERE key = $1', [key]);
+    return r.rows.length ? r.rows[0].value : def;
+  }
+  const p = path.join(DATA_DIR, key + '.json');
+  if (!fs.existsSync(p)) return def;
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; }
+}
+
+async function setKV(key, value) {
+  if (USE_PG) {
+    await pool.query(
+      'INSERT INTO kv (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
+      [key, JSON.stringify(value)],
+    );
+    return;
+  }
+  fs.writeFileSync(path.join(DATA_DIR, key + '.json'), JSON.stringify(value, null, 2));
+}
+
+const DEFAULT_CONFIG = { adminPassword: 'admin123' };
+async function getConfig() { return (await getKV('config', DEFAULT_CONFIG)) || DEFAULT_CONFIG; }
+async function setConfig(cfg) { await setKV('config', cfg); }
+
+async function requireAdmin(req, res, next) {
+  try {
+    const cfg = await getConfig();
+    if (req.headers.authorization !== `Bearer ${cfg.adminPassword}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  } catch (e) {
+    console.error('requireAdmin error:', e);
+    res.status(500).json({ error: 'Storage error' });
+  }
 }
 
 const rooms = new Map();
@@ -76,28 +97,33 @@ function addMessage(role, code, msg) {
   arr.push(msg);
 }
 
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   const code = generateCode();
   rooms.set(code, { host: null, viewers: [] });
   const id = crypto.randomUUID();
-  const sessions = readJSON('sessions.json');
-  sessions.push({ id, code, employee: null, employeeName: null, startTime: new Date().toISOString(), endTime: null, duration: null, durationSeconds: null });
-  writeJSON('sessions.json', sessions);
+  // Логирование сессии — best-effort: сбой хранилища не должен ломать подключение.
+  try {
+    const sessions = await getKV('sessions', []);
+    sessions.push({ id, code, employee: null, employeeName: null, startTime: new Date().toISOString(), endTime: null, duration: null, durationSeconds: null });
+    await setKV('sessions', sessions);
+  } catch (e) { console.error('session log (register) failed:', e.message); }
   addMessage('host', code, { type: 'code', code });
   res.json({ type: 'code', code });
 });
 
-app.post('/join', (req, res) => {
+app.post('/join', async (req, res) => {
   const { code, employeeLogin, employeeName } = req.body;
   if (!code || !rooms.has(code)) return res.json({ type: 'error', msg: 'Неверный код' });
   if (employeeLogin || employeeName) {
-    const sessions = readJSON('sessions.json');
-    const session = sessions.find(s => s.code === code && !s.endTime);
-    if (session) {
-      session.employee = employeeLogin || session.employee;
-      session.employeeName = employeeName || session.employeeName;
-      writeJSON('sessions.json', sessions);
-    }
+    try {
+      const sessions = await getKV('sessions', []);
+      const session = sessions.find(s => s.code === code && !s.endTime);
+      if (session) {
+        session.employee = employeeLogin || session.employee;
+        session.employeeName = employeeName || session.employeeName;
+        await setKV('sessions', sessions);
+      }
+    } catch (e) { console.error('session update (join) failed:', e.message); }
   }
   addMessage('host', code, { type: 'viewer-joined' });
   res.json({ type: 'ok' });
@@ -129,72 +155,88 @@ app.get('/poll/:role/:code', (req, res) => {
   req.on('close', () => clearInterval(interval));
 });
 
-app.post('/disconnect', (req, res) => {
+app.post('/disconnect', async (req, res) => {
   const { code } = req.body;
   if (code && rooms.has(code)) {
     addMessage('viewer', code, { type: 'host-disconnected' });
     addMessage('host', code, { type: 'host-disconnected' });
     rooms.delete(code);
     roomCodes.delete(code);
-    const sessions = readJSON('sessions.json');
-    const session = sessions.find(s => s.code === code && !s.endTime);
-    if (session) {
-      session.endTime = new Date().toISOString();
-      const diffMs = new Date(session.endTime).getTime() - new Date(session.startTime).getTime();
-      session.durationSeconds = Math.round(diffMs / 1000);
-      session.duration = Math.round(diffMs / 60000);
-      writeJSON('sessions.json', sessions);
-    }
+    try {
+      const sessions = await getKV('sessions', []);
+      const session = sessions.find(s => s.code === code && !s.endTime);
+      if (session) {
+        session.endTime = new Date().toISOString();
+        const diffMs = new Date(session.endTime).getTime() - new Date(session.startTime).getTime();
+        session.durationSeconds = Math.round(diffMs / 1000);
+        session.duration = Math.round(diffMs / 60000);
+        await setKV('sessions', sessions);
+      }
+    } catch (e) { console.error('session end (disconnect) failed:', e.message); }
   }
   res.json({ type: 'ok' });
 });
 
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', async (req, res) => {
   const { login, password } = req.body;
   if (!login || !password) return res.json({ type: 'error', msg: 'Введите логин и пароль' });
-  const employees = readJSON('employees.json');
-  const emp = employees.find(e => e.login === login && e.password === password && e.active !== false);
-  if (!emp) return res.json({ type: 'error', msg: 'Неверный логин или пароль' });
-  res.json({ type: 'ok', employee: { login: emp.login, name: emp.name } });
+  try {
+    const employees = await getKV('employees', []);
+    const emp = employees.find(e => e.login === login && e.password === password && e.active !== false);
+    if (!emp) return res.json({ type: 'error', msg: 'Неверный логин или пароль' });
+    res.json({ type: 'ok', employee: { login: emp.login, name: emp.name } });
+  } catch (e) {
+    console.error('/auth/login error:', e);
+    res.status(500).json({ type: 'error', msg: 'Ошибка сервера, попробуйте ещё раз' });
+  }
 });
 
 // Admin API
-app.post('/admin/change-password', requireAdmin, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  const cfg = readConfig();
-  if (currentPassword !== cfg.adminPassword) return res.json({ type: 'error', msg: 'Текущий пароль неверен' });
-  if (!newPassword || newPassword.length < 4) return res.json({ type: 'error', msg: 'Новый пароль должен быть минимум 4 символа' });
-  cfg.adminPassword = newPassword;
-  writeConfig(cfg);
-  res.json({ type: 'ok', msg: 'Пароль изменён' });
+app.post('/admin/change-password', requireAdmin, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const cfg = await getConfig();
+    if (currentPassword !== cfg.adminPassword) return res.json({ type: 'error', msg: 'Текущий пароль неверен' });
+    if (!newPassword || newPassword.length < 4) return res.json({ type: 'error', msg: 'Новый пароль должен быть минимум 4 символа' });
+    cfg.adminPassword = newPassword;
+    await setConfig(cfg);
+    res.json({ type: 'ok', msg: 'Пароль изменён' });
+  } catch (e) { console.error('change-password error:', e); res.status(500).json({ type: 'error', msg: 'Ошибка сервера' }); }
 });
 
-app.get('/admin/employees', requireAdmin, (req, res) => {
-  res.json(readJSON('employees.json'));
+app.get('/admin/employees', requireAdmin, async (req, res) => {
+  try { res.json(await getKV('employees', [])); }
+  catch (e) { console.error('get employees error:', e); res.status(500).json({ error: 'Storage error' }); }
 });
 
-app.post('/admin/employees', requireAdmin, (req, res) => {
-  const { login, password, name } = req.body;
-  if (!login || !password) return res.status(400).json({ error: 'Login and password required' });
-  const employees = readJSON('employees.json');
-  if (employees.find(e => e.login === login)) return res.status(400).json({ error: 'Login already exists' });
-  employees.push({ login, password, name: name || login, active: true, createdAt: new Date().toISOString() });
-  writeJSON('employees.json', employees);
-  res.json({ type: 'ok' });
+app.post('/admin/employees', requireAdmin, async (req, res) => {
+  try {
+    const { login, password, name } = req.body;
+    if (!login || !password) return res.status(400).json({ error: 'Login and password required' });
+    const employees = await getKV('employees', []);
+    if (employees.find(e => e.login === login)) return res.status(400).json({ error: 'Login already exists' });
+    employees.push({ login, password, name: name || login, active: true, createdAt: new Date().toISOString() });
+    await setKV('employees', employees);
+    res.json({ type: 'ok' });
+  } catch (e) { console.error('add employee error:', e); res.status(500).json({ error: 'Storage error' }); }
 });
 
-app.delete('/admin/employees/:login', requireAdmin, (req, res) => {
-  let employees = readJSON('employees.json');
-  employees = employees.filter(e => e.login !== req.params.login);
-  writeJSON('employees.json', employees);
-  res.json({ type: 'ok' });
+app.delete('/admin/employees/:login', requireAdmin, async (req, res) => {
+  try {
+    let employees = await getKV('employees', []);
+    employees = employees.filter(e => e.login !== req.params.login);
+    await setKV('employees', employees);
+    res.json({ type: 'ok' });
+  } catch (e) { console.error('delete employee error:', e); res.status(500).json({ error: 'Storage error' }); }
 });
 
-app.get('/admin/sessions', requireAdmin, (req, res) => {
-  let sessions = readJSON('sessions.json');
-  const { employee } = req.query;
-  if (employee) sessions = sessions.filter(s => s.employeeName === employee || s.employee === employee);
-  res.json(sessions);
+app.get('/admin/sessions', requireAdmin, async (req, res) => {
+  try {
+    let sessions = await getKV('sessions', []);
+    const { employee } = req.query;
+    if (employee) sessions = sessions.filter(s => s.employeeName === employee || s.employee === employee);
+    res.json(sessions);
+  } catch (e) { console.error('get sessions error:', e); res.status(500).json({ error: 'Storage error' }); }
 });
 
 // Admin web page
@@ -320,7 +362,7 @@ app.get('/admin', (req, res) => {
     }
 
     function renderSessions(c) {
-      c.innerHTML = '<div class="card"><div class="card-header"><h2>📊 Сессии'+(filterEmployee?' сотрудника "'+filterEmployee+'"':'')+' ('+sessions.length+')</h2><div>'+(filterEmployee?'<button class="btn btn-warning btn-sm" onclick="clearFilter()">✕ Сбросить</button>':'')+'</div></div><table><thead><tr><th>Код</th><th>Сотрудник</th><th>Начало</th><th>Конец</th><th>Длительность</th></tr></thead><tbody>'+sessions.slice().reverse().map(s=>{const d=s.durationSeconds!==null?fmt(s.durationSeconds):(s.endTime?'-':'🟢 Активна'); return '<tr><td style="font-family:monospace">'+(s.code||'-')+'</td><td>'+(s.employeeName||s.employee||'-')+'</td><td>'+dt(s.startTime)+'</td><td>'+dt(s.endTime)+'</td><td><span class="duration-format">'+d+'</span></td></tr>';}).join('')+(sessions.length===0?'<tr><td colspan="5" class="empty-state">Нет сессий</td></tr>':'')+'</tbody></table></div>';
+      c.innerHTML = '<div class="card"><div class="card-header"><h2>📊 Сессии'+(filterEmployee?' сотрудника "'+filterEmployee+'"':'')+' ('+sessions.length+')</h2><div>'+(filterEmployee?'<button class="btn btn-warning btn-sm" onclick="clearFilter()">✕ Сбросить</button>':'')+'</div></div><table><thead><tr><th>Код</th><th>Сотрудник</th><th>Добавочный</th><th>Начало</th><th>Конец</th><th>Длительность</th></tr></thead><tbody>'+sessions.slice().reverse().map(s=>{const d=s.durationSeconds!==null?fmt(s.durationSeconds):(s.endTime?'-':'🟢 Активна'); return '<tr><td style="font-family:monospace">'+(s.code||'-')+'</td><td>'+(s.employeeName||s.employee||'-')+'</td><td style="font-family:monospace">'+(s.employee||'-')+'</td><td>'+dt(s.startTime)+'</td><td>'+dt(s.endTime)+'</td><td><span class="duration-format">'+d+'</span></td></tr>';}).join('')+(sessions.length===0?'<tr><td colspan="6" class="empty-state">Нет сессий</td></tr>':'')+'</tbody></table></div>';
     }
 
     function renderSettings(c) {
@@ -368,13 +410,22 @@ app.get('/admin', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ ok: true, time: Date.now(), uptime: process.uptime(), server: 'express-v2' });
+  res.json({ ok: true, time: Date.now(), uptime: process.uptime(), server: 'express-v2', storage: USE_PG ? 'pg' : 'files' });
 });
 
-['sessions.json', 'employees.json'].forEach(f => {
-  const p = path.join(DATA_DIR, f);
-  if (!fs.existsSync(p)) fs.writeFileSync(p, '[]');
-});
-
-readConfig();
-app.listen(PORT, '0.0.0.0', () => { console.log('  RemoteDeskPBX SERVER v2 (Express) on port '+PORT+' /admin'); });
+// Инициализация хранилища, затем старт сервера (сервер поднимается в любом случае).
+initStore()
+  .then(() => {
+    if (!USE_PG) {
+      ['sessions', 'employees'].forEach(k => {
+        const p = path.join(DATA_DIR, k + '.json');
+        if (!fs.existsSync(p)) fs.writeFileSync(p, '[]');
+      });
+    }
+  })
+  .catch(e => console.error('initStore error (сервер всё равно стартует):', e.message))
+  .finally(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log('  RemoteDeskPBX SERVER v2 (Express) on port ' + PORT + ' /admin');
+    });
+  });

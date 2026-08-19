@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [roomCode, setRoomCode] = useState('');
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [connectionQuality, setConnectionQuality] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -279,6 +280,16 @@ const App: React.FC = () => {
 
   const displayCode = roomCode.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
 
+  const copyCode = () => {
+    const api = (window as any).electronAPI;
+    try {
+      if (api?.copyText) api.copyText(roomCode);
+      else if (navigator.clipboard) navigator.clipboard.writeText(roomCode).catch(() => {});
+    } catch {}
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   if (!roomCode) {
     return (
       <div style={{ ...s.page, minHeight: '100vh', padding: '56px 24px', textAlign: 'center' }}>
@@ -308,8 +319,16 @@ const App: React.FC = () => {
         </div>
         <div style={{ ...s.card, padding: 24, textAlign: 'center', marginBottom: 20 }}>
           <p style={{ fontSize: 14, color: colors.muted, margin: 0 }}>Сообщите этот код сотруднику техподдержки:</p>
-          <div style={{ fontSize: 46, fontWeight: 700, letterSpacing: 10, color: colors.navy, fontFamily: mono, padding: '14px 20px', background: colors.subtle, borderRadius: radius.lg, border: `1px dashed ${colors.green}`, display: 'inline-block', userSelect: 'all', margin: '14px 0 6px' }}>
+          <div onContextMenu={(e) => { e.preventDefault(); copyCode(); }}
+            title="Нажмите «Скопировать» или правой кнопкой мыши"
+            style={{ fontSize: 46, fontWeight: 700, letterSpacing: 10, color: colors.navy, fontFamily: mono, padding: '14px 20px', background: colors.subtle, borderRadius: radius.lg, border: `1px dashed ${colors.green}`, display: 'inline-block', userSelect: 'all', cursor: 'pointer', margin: '14px 0 6px' }}>
             {displayCode}
+          </div>
+          <div>
+            <button onClick={copyCode}
+              style={{ ...s.btnPrimary, padding: '9px 18px', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              {copied ? '✓ Скопировано' : '📋 Скопировать код'}
+            </button>
           </div>
           <p style={{ fontSize: 13, marginTop: 8, color: colors.muted, display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center' }}>
             <span>Статус: <span style={{ fontWeight: 600, color: status === 'connected' ? colors.green : colors.warning }}>{status}</span></span>

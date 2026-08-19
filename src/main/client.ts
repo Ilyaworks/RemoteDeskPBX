@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, session, ipcMain, Menu, screen } from 'electron';
+import { app, BrowserWindow, desktopCapturer, session, ipcMain, Menu, screen, clipboard } from 'electron';
 import path from 'path';
 import { mouse, keyboard, Button, Key } from '@nut-tree-fork/nut-js';
 
@@ -67,6 +67,12 @@ ipcMain.on('key-press', async (_e, keycode: number) => {
       await keyboard.releaseKey(key);
     }
   } catch (err) { console.error('key-press error:', err); }
+});
+
+// Копирование кода подключения в буфер обмена (по кнопке/правому клику у клиента)
+ipcMain.on('copy-text', (_e, text: string) => {
+  try { clipboard.writeText(String(text ?? '')); }
+  catch (err) { console.error('copy-text error:', err); }
 });
 
 // ============ T2: плавающее окно чата у клиента ============
